@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>MODA — Diseñador 3D</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0D0F16;
+    --card:     #1C2030;
+    --border:   #2A2E40;
+    --gold:     #C8A96E;
+    --gold-dim: #8A6E3E;
+    --text:     #E8EAF0;
+    --muted:    #8892A4;
+    --active-bg:#252A3A;
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, sans-serif;
+    overflow: hidden;
+  }
+
+  /* ── Layout ─────────────────────────────────────────────── */
+  #app {
+    display: flex;
+    flex-direction: column;
+    width: 100%; height: 100%;
+  }
+
+  /* ── Header ─────────────────────────────────────────────── */
+  #header {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    height: 52px;
+    background: #10121A;
+    border-bottom: 1px solid var(--border);
+    z-index: 10;
+  }
+  #header-left { display: flex; align-items: center; gap: 10px; }
+  #logo {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: 4px;
+    color: var(--gold);
+  }
+  #tagline {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    border-left: 1px solid var(--border);
+    padding-left: 10px;
+  }
+  #header-right { display: flex; align-items: center; gap: 6px; }
+
+  /* ── Toggles in header ───────────────────────────────────── */
+  .toggle-pill {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: var(--muted);
+    cursor: pointer;
+    user-select: none;
+    padding: 4px 8px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    transition: border-color .2s, color .2s;
+  }
+  .toggle-pill.on { border-color: var(--gold); color: var(--gold); }
+  .toggle-pill input { display: none; }
+
+  /* ── 3D Viewer ───────────────────────────────────────────── */
+  #viewer-wrap {
+    flex: 1 1 0;
+    min-height: 0;
+    position: relative;
+  }
+  #viewer-iframe {
+    width: 100%; height: 100%;
+    border: none;
+    display: block;
+    background: #111318;
+  }
+  #viewer-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #111318;
+    pointer-events: none;
+    transition: opacity .5s;
+  }
+  #viewer-overlay.hidden { opacity: 0; pointer-events: none; }
+  .loader-ring {
+    width: 40px; height: 40px;
+    border: 3px solid var(--border);
+    border-top-color: var(--gold);
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Export button (floating) ────────────────────────────── */
+  #btn-export {
+    position: absolute;
+    bottom: 14px;
+    right: 14px;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--gold-dim);
+    background: rgba(13,15,22,0.88);
+    color: var(--gold);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+    transition: background .15s, border-color .15s;
+  }
+  #btn-export:hover { background: rgba(200,169,110,0.12); border-color: var(--gold); }
+  #btn-export:active { transform: scale(0.97); }
+
+  /* ── Controls panel ─────────────────────────────────────── */
+  #controls {
+    flex: 0 0 auto;
+    background: var(--card);
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    max-height: 42vh;
+    min-height: 180px;
+  }
+
+  /* Tab bar */
+  #tab-bar {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    scrollbar-width: none;
+    flex-shrink: 0;
+  }
+  #tab-bar::-webkit-scrollbar { display: none; }
+  .tab {
+    flex: 1 0 auto;
+    padding: 9px 10px;
+    font-size: 11px;
+    white-space: nowrap;
+    text-align: center;
+    cursor: pointer;
+    color: var(--muted);
+    border-bottom: 2px solid transparent;
+    transition: color .2s, border-color .2s;
+    user-select: none;
+  }
+  .tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+
+  /* Tab panels */
+  #panels {
+    flex: 1 1 0;
+    overflow: hidden;
+    position: relative;
+  }
+  .panel {
+    position: absolute;
+    inset: 0;
+    overflow-y: auto;
+    padding: 10px 12px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+    display: none;
+  }
+  .panel.active { display: block; }
+  .panel::-webkit-scrollbar { width: 4px; }
+  .panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* Cut grid */
+  .cut-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+  }
+  .cut-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 8px 4px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 10px;
+    text-align: center;
+    transition: border-color .15s, color .15s, background .15s;
+    user-select: none;
+  }
+  .cut-btn .cut-emoji { font-size: 18px; line-height: 1; }
+  .cut-btn .cut-name  { font-size: 9px; }
+  .cut-btn.active {
+    border-color: var(--gold);
+    color: var(--gold);
+    background: var(--active-bg);
+  }
+
+  /* Fabric section */
+  .section-label {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+    margin-top: 4px;
+  }
+  .fabric-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  .fabric-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 8px 4px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 10px;
+    text-align: center;
+    transition: border-color .15s, color .15s, background .15s;
+    user-select: none;
+  }
+  .fabric-btn .fab-emoji { font-size: 18px; line-height: 1; }
+  .fabric-btn .fab-name  { font-size: 9px; }
+  .fabric-btn.active {
+    border-color: var(--gold);
+    color: var(--gold);
+    background: var(--active-bg);
+  }
+
+  /* Color swatches */
+  .swatches-wrap {
+    display: flex;
+    gap: 7px;
+    flex-wrap: wrap;
+    padding-bottom: 6px;
+  }
+  .swatch {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: border-color .15s, transform .1s;
+    flex-shrink: 0;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+  }
+  .swatch:hover  { transform: scale(1.12); }
+  .swatch.active { border-color: var(--gold); transform: scale(1.18); }
+
+  /* ── Responsive: tablet+ horizontal expansion ─────────────── */
+  @media (min-width: 640px) {
+    .cut-grid, .fabric-grid { grid-template-columns: repeat(8, 1fr); }
+    .swatch { width: 30px; height: 30px; }
+  }
+
+  /* ── Desktop: side panel layout ──────────────────────────── */
+  @media (min-width: 1024px) {
+    #app { flex-direction: row; flex-wrap: wrap; }
+    #header { flex: 0 0 100%; order: -1; }
+    #viewer-wrap {
+      flex: 1 1 0;
+      min-height: 0;
+      height: calc(100vh - 52px);
+      order: 1;
+    }
+    #controls {
+      flex: 0 0 300px;
+      max-height: calc(100vh - 52px);
+      min-height: 0;
+      border-top: none;
+      border-left: 1px solid var(--border);
+      order: 2;
+    }
+    .cut-grid, .fabric-grid { grid-template-columns: repeat(4, 1fr); }
+    .swatch { width: 30px; height: 30px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Header -->
+  <header id="header">
+    <div id="header-left">
+      <span id="logo">MODA</span>
+      <span id="tagline">Diseñador 3D</span>
+    </div>
+    <div id="header-right">
+      <label class="toggle-pill on" id="tgl-shirt">
+        <input type="checkbox" checked>
+        👕 Camisa
+      </label>
+      <label class="toggle-pill on" id="tgl-pants">
+        <input type="checkbox" checked>
+        👖 Pantalón
+      </label>
+      <label class="toggle-pill on" id="tgl-mannequin">
+        <input type="checkbox" checked>
+        🗿 Maniquí
+      </label>
+    </div>
+  </header>
+
+  <!-- 3D Viewer -->
+  <div id="viewer-wrap">
+    <iframe id="viewer-iframe" allowtransparency="true"></iframe>
+    <div id="viewer-overlay">
+      <div class="loader-ring"></div>
+    </div>
+    <button id="btn-export">📸 Exportar PNG</button>
+  </div>
+
+  <!-- Controls panel -->
+  <section id="controls">
+    <div id="tab-bar">
+      <div class="tab active" data-tab="shirt-cut">✂️ Corte Camisa</div>
+      <div class="tab" data-tab="pants-cut">📐 Corte Pantalón</div>
+      <div class="tab" data-tab="shirt-fabric">🧵 Tela Camisa</div>
+      <div class="tab" data-tab="pants-fabric">🪡 Tela Pantalón</div>
+    </div>
+    <div id="panels">
+
+      <!-- Shirt cut panel -->
+      <div class="panel active" id="panel-shirt-cut">
+        <div class="cut-grid" id="grid-shirt-cut"></div>
+      </div>
+
+      <!-- Pants cut panel -->
+      <div class="panel" id="panel-pants-cut">
+        <div class="cut-grid" id="grid-pants-cut"></div>
+      </div>
+
+      <!-- Shirt fabric panel -->
+      <div class="panel" id="panel-shirt-fabric">
+        <div class="section-label">Tipo de tela</div>
+        <div class="fabric-grid" id="grid-shirt-fabric"></div>
+        <div class="section-label">Color</div>
+        <div class="swatches-wrap" id="swatches-shirt"></div>
+      </div>
+
+      <!-- Pants fabric panel -->
+      <div class="panel" id="panel-pants-fabric">
+        <div class="section-label">Tipo de tela</div>
+        <div class="fabric-grid" id="grid-pants-fabric"></div>
+        <div class="section-label">Color</div>
+        <div class="swatches-wrap" id="swatches-pants"></div>
+      </div>
+
+    </div>
+  </section>
+
+</div>
+
+<script>
+// ── Data ──────────────────────────────────────────────────────────────────────
+const SHIRT_CUTS = [
+  { id: 'tshirt',     name: 'T-Shirt',      emoji: '👕' },
+  { id: 'vneck',      name: 'Cuello V',      emoji: '🔻' },
+  { id: 'polo',       name: 'Polo',          emoji: '🎽' },
+  { id: 'longsleeve', name: 'Manga Larga',   emoji: '🧥' },
+  { id: 'buttonup',   name: 'Camisabotones', emoji: '👔' },
+  { id: 'sleeveless', name: 'Sin Mangas',    emoji: '🩱' },
+  { id: 'crop',       name: 'Crop Top',      emoji: '✂️' },
+  { id: 'hoodie',     name: 'Sudadera',      emoji: '🧢' },
+];
+const PANTS_CUTS = [
+  { id: 'skinny',   name: 'Skinny',   emoji: '🦵' },
+  { id: 'straight', name: 'Straight', emoji: '📏' },
+  { id: 'widel',    name: 'Wide Leg', emoji: '🎪' },
+  { id: 'bootcut',  name: 'Bootcut',  emoji: '🥾' },
+  { id: 'cargo',    name: 'Cargo',    emoji: '🪖' },
+  { id: 'dress',    name: 'Vestir',   emoji: '💼' },
+  { id: 'jogger',   name: 'Jogger',   emoji: '🏃' },
+  { id: 'shorts',   name: 'Short',    emoji: '🩳' },
+];
+const FABRICS = [
+  { id: 'cotton',    name: 'Algodón',    emoji: '🌿', colors: ['#FFFFFF','#F5F5DC','#000000','#1C3A5E','#8B0000','#2E7D32','#FF6B35','#9C27B0'] },
+  { id: 'denim',     name: 'Denim',      emoji: '👖', colors: ['#1A237E','#37474F','#000051','#1B5E20','#4A148C','#BF360C','#33691E','#263238'] },
+  { id: 'linen',     name: 'Lino',       emoji: '🌾', colors: ['#F5F5DC','#E8DCC8','#D4C5A9','#BCAAA4','#A1887F','#8D6E63','#795548','#5D4037'] },
+  { id: 'silk',      name: 'Seda',       emoji: '✨', colors: ['#FFD700','#FF1744','#00BCD4','#E91E63','#9C27B0','#1DE9B6','#FF6F00','#F8F8FF'] },
+  { id: 'polyester', name: 'Poliéster',  emoji: '🔬', colors: ['#F44336','#2196F3','#4CAF50','#FF9800','#9C27B0','#00BCD4','#FFEB3B','#FF5722'] },
+  { id: 'velvet',    name: 'Terciopelo', emoji: '🎩', colors: ['#4A0E8F','#1B0000','#004D40','#B71C1C','#1A237E','#212121','#880E4F','#1B5E20'] },
+  { id: 'leather',   name: 'Cuero',      emoji: '🥋', colors: ['#3E2723','#1A1A1A','#BF360C','#212121','#4E342E','#6D4C41','#D7CCC8','#8D6E63'] },
+  { id: 'flannel',   name: 'Franela',    emoji: '🧸', colors: ['#B71C1C','#1A237E','#1B5E20','#4A148C','#E65100','#37474F','#880E4F','#33691E'] },
+];
+
+// ── App state ─────────────────────────────────────────────────────────────────
+const state = {
+  shirtCutId:    'tshirt',
+  pantsCutId:    'straight',
+  shirtFabricId: 'cotton',
+  pantsFabricId: 'denim',
+  shirtColor:    '#FFFFFF',
+  pantsColor:    '#1A237E',
+  showShirt:     true,
+  showPants:     true,
+  showMannequin: true,
+};
+
+// ── Viewer HTML (inlined Three.js scene, modified to postMessage to parent) ──
+const VIEWER_HTML = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { width:100%; height:100%; overflow:hidden; background:transparent; }
+canvas { display:block; touch-action:none; }
+</style>
+</head>
+<body>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/"}}
+<\/script>
+<script type="module">
+import * as THREE from 'three';
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x111318);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.1;
+document.body.appendChild(renderer.domElement);
+
+const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.set(0, 0.4, 5.5);
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+scene.add(new THREE.AmbientLight(0xfff5e4, 0.6));
+const key = new THREE.DirectionalLight(0xfff5dc, 2.8);
+key.position.set(3, 6, 5); key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+key.shadow.camera.near = 0.1; key.shadow.camera.far = 30;
+key.shadow.camera.left = -5; key.shadow.camera.right = 5;
+key.shadow.camera.top = 8; key.shadow.camera.bottom = -5;
+key.shadow.bias = -0.001;
+scene.add(key);
+const fill = new THREE.DirectionalLight(0xd0e8ff, 1.0);
+fill.position.set(-4, 3, 2); scene.add(fill);
+const rim = new THREE.DirectionalLight(0xffffff, 0.5);
+rim.position.set(0, -2, -4); scene.add(rim);
+const topL = new THREE.DirectionalLight(0xfff0cc, 0.4);
+topL.position.set(0, 8, 0); scene.add(topL);
+
+const floorGeo = new THREE.PlaneGeometry(12, 12);
+const floorMat = new THREE.MeshStandardMaterial({ color: 0x1a1d24, roughness: 0.9, metalness: 0.1 });
+const floor = new THREE.Mesh(floorGeo, floorMat);
+floor.rotation.x = -Math.PI / 2; floor.position.y = -2.8; floor.receiveShadow = true;
+scene.add(floor);
+
+function hexToRgb(hex) {
+  return { r: parseInt(hex.slice(1,3),16), g: parseInt(hex.slice(3,5),16), b: parseInt(hex.slice(5,7),16) };
+}
+function darken(hex, f) {
+  const {r,g,b} = hexToRgb(hex);
+  return \`rgb(\${Math.round(r*f)},\${Math.round(g*f)},\${Math.round(b*f)})\`;
+}
+function lighten(hex, f) {
+  const {r,g,b} = hexToRgb(hex);
+  return \`rgb(\${Math.min(255,Math.round(r+(255-r)*f))},\${Math.min(255,Math.round(g+(255-g)*f))},\${Math.min(255,Math.round(b+(255-b)*f))})\`;
+}
+
+function createFabricTexture(fabricId, color) {
+  const sz = 512;
+  const c = document.createElement('canvas'); c.width = sz; c.height = sz;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = color; ctx.fillRect(0, 0, sz, sz);
+  switch(fabricId) {
+    case 'cotton': {
+      ctx.globalAlpha = 0.12;
+      for (let i = 0; i < sz; i += 4) {
+        ctx.strokeStyle = darken(color, 0.7); ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,sz); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(sz,i); ctx.stroke();
+      }
+      ctx.globalAlpha = 0.06;
+      for (let i = 0; i < sz; i += 8) {
+        ctx.strokeStyle = lighten(color, 0.3); ctx.lineWidth = 0.5;
+        ctx.beginPath(); ctx.moveTo(i+2,0); ctx.lineTo(i+2,sz); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0,i+2); ctx.lineTo(sz,i+2); ctx.stroke();
+      }
+      break;
+    }
+    case 'denim': {
+      ctx.globalAlpha = 0.18;
+      for (let i = -sz; i < sz*2; i += 5) {
+        ctx.strokeStyle = darken(color, 0.6); ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i+sz,sz); ctx.stroke();
+      }
+      ctx.globalAlpha = 0.07;
+      for (let i = -sz; i < sz*2; i += 10) {
+        ctx.strokeStyle = lighten(color, 0.4); ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i+sz,sz); ctx.stroke();
+      }
+      ctx.globalAlpha = 0.05;
+      for (let i = 0; i < sz; i += 2) for (let j = 0; j < sz; j += 2) {
+        if (Math.random() > 0.6) { ctx.fillStyle = lighten(color, 0.2); ctx.fillRect(i,j,1,1); }
+      }
+      break;
+    }
+    case 'linen': {
+      ctx.globalAlpha = 0.2;
+      for (let i = 0; i < sz; i += 3) {
+        ctx.strokeStyle = i%6===0 ? darken(color,0.65) : lighten(color,0.25);
+        ctx.lineWidth = i%6===0 ? 1.5 : 0.8;
+        ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(sz,i); ctx.stroke();
+      }
+      ctx.globalAlpha = 0.1;
+      for (let i = 0; i < sz; i += 6) {
+        ctx.strokeStyle = darken(color, 0.7); ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,sz); ctx.stroke();
+      }
+      break;
+    }
+    case 'silk': {
+      const gr = ctx.createLinearGradient(0,0,sz,sz);
+      gr.addColorStop(0, color); gr.addColorStop(0.3, lighten(color,0.45));
+      gr.addColorStop(0.5, color); gr.addColorStop(0.7, lighten(color,0.3)); gr.addColorStop(1, color);
+      ctx.globalAlpha = 0.7; ctx.fillStyle = gr; ctx.fillRect(0,0,sz,sz);
+      ctx.globalAlpha = 0.06;
+      for (let i = -sz; i < sz*2; i += 8) {
+        ctx.strokeStyle = lighten(color,0.6); ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i+sz,sz); ctx.stroke();
+      }
+      break;
+    }
+    case 'polyester': {
+      ctx.globalAlpha = 0.08;
+      for (let i = 0; i < sz; i += 2) {
+        ctx.strokeStyle = darken(color,0.75); ctx.lineWidth = 0.5;
+        ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,sz); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(sz,i); ctx.stroke();
+      }
+      const sh = ctx.createLinearGradient(0,0,sz*0.7,sz*0.7);
+      sh.addColorStop(0,'rgba(255,255,255,0.08)'); sh.addColorStop(0.5,'rgba(255,255,255,0.0)'); sh.addColorStop(1,'rgba(255,255,255,0.04)');
+      ctx.globalAlpha = 1; ctx.fillStyle = sh; ctx.fillRect(0,0,sz,sz);
+      break;
+    }
+    case 'velvet': {
+      for (let i = 0; i < 60000; i++) {
+        const x = Math.random()*sz, y = Math.random()*sz, br = Math.random();
+        ctx.globalAlpha = br * 0.12;
+        ctx.fillStyle = br > 0.5 ? lighten(color,0.35) : darken(color,0.5);
+        ctx.fillRect(x,y,1.2,1.2);
+      }
+      ctx.globalAlpha = 0.04;
+      for (let i = 0; i < sz; i += 3) {
+        ctx.strokeStyle = lighten(color,0.6); ctx.lineWidth = 0.5;
+        ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(sz,i); ctx.stroke();
+      }
+      break;
+    }
+    case 'leather': {
+      for (let i = 0; i < 8000; i++) {
+        const x = Math.random()*sz, y = Math.random()*sz;
+        ctx.globalAlpha = Math.random()*0.07;
+        ctx.fillStyle = Math.random()>0.5 ? darken(color,0.6) : lighten(color,0.15);
+        const s = Math.random()*3+1;
+        ctx.beginPath(); ctx.ellipse(x,y,s,s*0.4,Math.random()*Math.PI,0,Math.PI*2); ctx.fill();
+      }
+      const sh = ctx.createLinearGradient(0,0,sz*0.6,sz*0.4);
+      sh.addColorStop(0,'rgba(255,255,255,0.12)'); sh.addColorStop(1,'rgba(255,255,255,0.0)');
+      ctx.globalAlpha = 1; ctx.fillStyle = sh; ctx.fillRect(0,0,sz,sz);
+      break;
+    }
+    case 'flannel': {
+      const cl2 = [darken(color,0.6), lighten(color,0.3), darken(color,0.8)];
+      const st = 32;
+      for (let i = 0; i < sz; i += st) { ctx.globalAlpha = 0.18; ctx.fillStyle = cl2[Math.floor(i/st)%3]; ctx.fillRect(i,0,st,sz); }
+      for (let i = 0; i < sz; i += st) { ctx.globalAlpha = 0.14; ctx.fillStyle = cl2[Math.floor(i/st)%3]; ctx.fillRect(0,i,sz,st); }
+      ctx.globalAlpha = 0.07;
+      for (let i = 0; i < sz; i += 4) {
+        ctx.strokeStyle = darken(color,0.7); ctx.lineWidth = 0.5;
+        ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,sz); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(sz,i); ctx.stroke();
+      }
+      break;
+    }
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(6, 6); return tex;
+}
+
+function createNormalMap(fabricId) {
+  const sz = 256;
+  const c = document.createElement('canvas'); c.width = sz; c.height = sz;
+  const ctx = c.getContext('2d');
+  const img = ctx.createImageData(sz, sz); const d = img.data;
+  for (let i = 0; i < sz; i++) for (let j = 0; j < sz; j++) {
+    let nx = 128, ny = 128, nz = 255;
+    switch(fabricId) {
+      case 'cotton': { const w = Math.sin(i*0.8)*12+Math.sin(j*0.8)*12; nx=128+w; ny=128+w; break; }
+      case 'denim':  { const d2=Math.sin((i+j)*0.4)*18; nx=128+d2; ny=128+d2*0.5; break; }
+      case 'linen':  { nx=128+Math.sin(j*1.0)*16; ny=128+Math.sin(i*1.6)*10; break; }
+      case 'silk':   { break; }
+      case 'velvet': { nx=128+(Math.random()-0.5)*20; ny=128+(Math.random()-0.5)*20; break; }
+      case 'leather':{ nx=128+Math.sin(i*0.3+j*0.1)*14; ny=128+Math.sin(j*0.3+i*0.1)*14; break; }
+      case 'flannel':{ nx=128+Math.sin(i*0.5)*10+Math.sin(j*0.5)*10; ny=128+Math.sin(i*0.5)*10+Math.sin(j*0.5)*10; break; }
+    }
+    const idx=(i*sz+j)*4;
+    d[idx]=Math.min(255,Math.max(0,nx)); d[idx+1]=Math.min(255,Math.max(0,ny));
+    d[idx+2]=nz; d[idx+3]=255;
+  }
+  ctx.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(8, 8); return tex;
+}
+
+function makeMaterial(fabricId, color, roughness, metalness) {
+  return new THREE.MeshStandardMaterial({
+    color: new THREE.Color(color), roughness, metalness,
+    map: createFabricTexture(fabricId, color),
+    normalMap: createNormalMap(fabricId),
+    normalScale: new THREE.Vector2(
+      fabricId==='silk'||fabricId==='polyester'?0.15:fabricId==='velvet'?0.5:0.4,
+      fabricId==='silk'||fabricId==='polyester'?0.15:fabricId==='velvet'?0.5:0.4
+    ),
+    envMapIntensity: fabricId==='silk'||fabricId==='leather'?0.9:0.3,
+    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4,
+  });
+}
+
+function createMannequin() {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({ color: 0xD9CFC4, roughness: 0.82, metalness: 0.04 });
+  const tp = [
+    new THREE.Vector2(0.06,0.00), new THREE.Vector2(0.28,0.20),
+    new THREE.Vector2(0.30,0.42), new THREE.Vector2(0.24,0.90),
+    new THREE.Vector2(0.26,1.22), new THREE.Vector2(0.28,1.60),
+    new THREE.Vector2(0.26,1.92), new THREE.Vector2(0.20,2.22),
+    new THREE.Vector2(0.13,2.45), new THREE.Vector2(0.10,2.62),
+  ];
+  const torso = new THREE.Mesh(new THREE.LatheGeometry(tp,32), mat);
+  torso.position.y = -0.40; torso.castShadow = true; g.add(torso);
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.10,0.10,0.30,16), mat);
+  neck.position.y = 2.38; neck.castShadow = true; g.add(neck);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.20,26,18), mat);
+  head.position.y = 2.75; head.castShadow = true; g.add(head);
+  const lArmU = new THREE.Mesh(new THREE.CylinderGeometry(0.078,0.070,0.80,14), mat);
+  lArmU.position.set(-0.47,1.72,0); lArmU.rotation.z = 0.10; lArmU.castShadow = true; g.add(lArmU);
+  const rArmU = lArmU.clone(); rArmU.position.x = 0.47; rArmU.rotation.z = -0.10; g.add(rArmU);
+  const lArmL = new THREE.Mesh(new THREE.CylinderGeometry(0.065,0.055,0.78,14), mat);
+  lArmL.position.set(-0.52,0.96,0); lArmL.rotation.z = 0.08; lArmL.castShadow = true; g.add(lArmL);
+  const rArmL = lArmL.clone(); rArmL.position.x = 0.52; rArmL.rotation.z = -0.08; g.add(rArmL);
+  const hGeo = new THREE.SphereGeometry(0.065,10,8);
+  const lHand = new THREE.Mesh(hGeo, mat); lHand.position.set(-0.55,0.55,0); g.add(lHand);
+  const rHand = lHand.clone(); rHand.position.x = 0.55; g.add(rHand);
+  const lLegU = new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.115,1.05,16), mat);
+  lLegU.position.set(-0.19,-0.90,0); lLegU.castShadow = true; g.add(lLegU);
+  const rLegU = lLegU.clone(); rLegU.position.x = 0.19; g.add(rLegU);
+  const lLegL = new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.075,1.05,16), mat);
+  lLegL.position.set(-0.19,-1.95,0); lLegL.castShadow = true; g.add(lLegL);
+  const rLegL = lLegL.clone(); rLegL.position.x = 0.19; g.add(rLegL);
+  const fGeo = new THREE.BoxGeometry(0.14,0.08,0.30);
+  const lFoot = new THREE.Mesh(fGeo, mat); lFoot.position.set(-0.19,-2.51,0.06); lFoot.castShadow = true; g.add(lFoot);
+  const rFoot = lFoot.clone(); rFoot.position.x = 0.19; g.add(rFoot);
+  return g;
+}
+
+function buildShirtShape(cutId) {
+  const shape = new THREE.Shape();
+  const bevel = { depth:0.2, bevelEnabled:true, bevelThickness:0.025, bevelSize:0.015, bevelSegments:4 };
+  const addNeck = (s, type) => {
+    if (type==='vneck') {
+      const h=new THREE.Path(); h.moveTo(-0.18,0.98); h.lineTo(0,0.52); h.lineTo(0.18,0.98); h.quadraticCurveTo(0,1.05,-0.18,0.98); s.holes.push(h);
+    } else if (type==='buttonup') {
+      const h=new THREE.Path(); h.moveTo(-0.12,1.08); h.lineTo(-0.08,0.88); h.lineTo(0.08,0.88); h.lineTo(0.12,1.08); h.quadraticCurveTo(0,1.14,-0.12,1.08); s.holes.push(h);
+    } else if (type==='polo') {
+      const h=new THREE.Path(); h.absellipse(0,1.0,0.13,0.1,0,Math.PI*2); s.holes.push(h);
+    } else {
+      const h=new THREE.Path(); h.absellipse(0,0.92,0.22,0.18,0,Math.PI*2); s.holes.push(h);
+    }
+  };
+  switch(cutId) {
+    case 'tshirt': case 'vneck': case 'polo': {
+      shape.moveTo(-0.68,-1.08); shape.lineTo(0.68,-1.08);
+      shape.lineTo(0.68,0.48); shape.lineTo(0.82,0.5); shape.quadraticCurveTo(1.28,0.62,1.42,0.5);
+      shape.lineTo(1.28,0.9); shape.lineTo(1.12,0.96);
+      shape.lineTo(0.62,0.85); shape.quadraticCurveTo(0.38,1.08,0.22,1.12);
+      shape.lineTo(-0.22,1.12); shape.quadraticCurveTo(-0.38,1.08,-0.62,0.85);
+      shape.lineTo(-1.12,0.96); shape.lineTo(-1.28,0.9);
+      shape.lineTo(-1.42,0.5); shape.quadraticCurveTo(-1.28,0.62,-0.82,0.5);
+      shape.lineTo(-0.68,0.48); shape.lineTo(-0.68,-1.08);
+      addNeck(shape, cutId);
+      if (cutId==='polo') {
+        const c=new THREE.Path(); c.moveTo(-0.14,1.1); c.lineTo(0.14,1.1); c.lineTo(0.16,1.22); c.lineTo(-0.16,1.22); c.lineTo(-0.14,1.1); shape.holes.push(c);
+      }
+      break;
+    }
+    case 'longsleeve': {
+      shape.moveTo(-0.68,-1.08); shape.lineTo(0.68,-1.08);
+      shape.lineTo(0.68,0.48); shape.lineTo(0.72,0.5); shape.lineTo(0.72,-0.9); shape.lineTo(1.2,-0.9);
+      shape.lineTo(1.22,0.52); shape.quadraticCurveTo(1.15,0.86,0.62,0.88);
+      shape.lineTo(-0.62,0.88); shape.quadraticCurveTo(-1.15,0.86,-1.22,0.52);
+      shape.lineTo(-1.2,-0.9); shape.lineTo(-0.72,-0.9); shape.lineTo(-0.72,0.5); shape.lineTo(-0.68,0.48); shape.lineTo(-0.68,-1.08);
+      addNeck(shape,'tshirt'); break;
+    }
+    case 'buttonup': {
+      shape.moveTo(-0.66,-1.08); shape.lineTo(0.66,-1.08);
+      shape.lineTo(0.66,0.46); shape.lineTo(0.7,0.48); shape.lineTo(0.7,-0.88); shape.lineTo(1.18,-0.88);
+      shape.lineTo(1.2,0.5); shape.quadraticCurveTo(1.1,0.92,0.58,0.98);
+      shape.lineTo(0.2,1.0); shape.lineTo(0.2,1.18); shape.lineTo(0.16,1.28); shape.lineTo(-0.16,1.28);
+      shape.lineTo(-0.2,1.18); shape.lineTo(-0.2,1.0);
+      shape.lineTo(-0.58,0.98); shape.quadraticCurveTo(-1.1,0.92,-1.2,0.5);
+      shape.lineTo(-1.18,-0.88); shape.lineTo(-0.7,-0.88); shape.lineTo(-0.7,0.48); shape.lineTo(-0.66,0.46); shape.lineTo(-0.66,-1.08);
+      const b1=new THREE.Path(); b1.absarc(0,-0.1,0.04,0,Math.PI*2); shape.holes.push(b1);
+      const b2=new THREE.Path(); b2.absarc(0,-0.45,0.04,0,Math.PI*2); shape.holes.push(b2);
+      const b3=new THREE.Path(); b3.absarc(0,-0.8,0.04,0,Math.PI*2); shape.holes.push(b3);
+      addNeck(shape,'buttonup'); break;
+    }
+    case 'sleeveless': {
+      shape.moveTo(-0.6,-1.08); shape.lineTo(0.6,-1.08);
+      shape.lineTo(0.6,0.6); shape.quadraticCurveTo(0.6,1.1,0.3,1.15);
+      shape.lineTo(0.18,1.15); shape.quadraticCurveTo(0.05,1.0,0,0.98);
+      shape.quadraticCurveTo(-0.05,1.0,-0.18,1.15);
+      shape.lineTo(-0.3,1.15); shape.quadraticCurveTo(-0.6,1.1,-0.6,0.6); shape.lineTo(-0.6,-1.08);
+      const nh=new THREE.Path(); nh.absellipse(0,0.92,0.18,0.15,0,Math.PI*2); shape.holes.push(nh); break;
+    }
+    case 'crop': {
+      shape.moveTo(-0.68,-0.18); shape.lineTo(0.68,-0.18);
+      shape.lineTo(0.68,0.48); shape.lineTo(0.82,0.5); shape.quadraticCurveTo(1.28,0.62,1.42,0.5);
+      shape.lineTo(1.28,0.9); shape.lineTo(1.12,0.96);
+      shape.lineTo(0.62,0.85); shape.quadraticCurveTo(0.38,1.08,0.22,1.12);
+      shape.lineTo(-0.22,1.12); shape.quadraticCurveTo(-0.38,1.08,-0.62,0.85);
+      shape.lineTo(-1.12,0.96); shape.lineTo(-1.28,0.9);
+      shape.lineTo(-1.42,0.5); shape.quadraticCurveTo(-1.28,0.62,-0.82,0.5);
+      shape.lineTo(-0.68,0.48); shape.lineTo(-0.68,-0.18);
+      addNeck(shape,'tshirt'); break;
+    }
+    case 'hoodie': {
+      shape.moveTo(-0.75,-1.08); shape.lineTo(0.75,-1.08);
+      shape.lineTo(0.75,0.46); shape.lineTo(0.8,0.48); shape.lineTo(0.8,-0.9); shape.lineTo(1.22,-0.9);
+      shape.lineTo(1.25,0.52); shape.quadraticCurveTo(1.1,0.92,0.7,0.98);
+      shape.lineTo(0.72,0.98); shape.quadraticCurveTo(0.65,1.28,0.4,1.5);
+      shape.lineTo(0.2,1.6); shape.quadraticCurveTo(0,1.68,-0.2,1.6);
+      shape.lineTo(-0.4,1.5); shape.quadraticCurveTo(-0.65,1.28,-0.72,0.98);
+      shape.lineTo(-0.7,0.98); shape.quadraticCurveTo(-1.1,0.92,-1.25,0.52);
+      shape.lineTo(-1.22,-0.9); shape.lineTo(-0.8,-0.9); shape.lineTo(-0.8,0.48); shape.lineTo(-0.75,0.46); shape.lineTo(-0.75,-1.08);
+      const hh=new THREE.Path(); hh.absellipse(0,0.95,0.28,0.22,0,Math.PI*2); shape.holes.push(hh);
+      const pk=new THREE.Path(); pk.moveTo(-0.35,-0.35); pk.lineTo(0.35,-0.35); pk.lineTo(0.35,-0.6); pk.lineTo(-0.35,-0.6); pk.lineTo(-0.35,-0.35); shape.holes.push(pk);
+      break;
+    }
+    default: {
+      shape.moveTo(-0.68,-1.08); shape.lineTo(0.68,-1.08);
+      shape.lineTo(0.68,0.48); shape.lineTo(0.82,0.5); shape.quadraticCurveTo(1.28,0.62,1.42,0.5);
+      shape.lineTo(1.28,0.9); shape.lineTo(1.12,0.96);
+      shape.lineTo(0.62,0.85); shape.quadraticCurveTo(0.38,1.08,0.22,1.12);
+      shape.lineTo(-0.22,1.12); shape.quadraticCurveTo(-0.38,1.08,-0.62,0.85);
+      shape.lineTo(-1.12,0.96); shape.lineTo(-1.28,0.9);
+      shape.lineTo(-1.42,0.5); shape.quadraticCurveTo(-1.28,0.62,-0.82,0.5);
+      shape.lineTo(-0.68,0.48); shape.lineTo(-0.68,-1.08);
+      addNeck(shape,'tshirt');
+    }
+  }
+  return new THREE.ExtrudeGeometry(shape, bevel);
+}
+
+function buildPantsShape(cutId) {
+  const bevel = { depth:0.22, bevelEnabled:true, bevelThickness:0.02, bevelSize:0.01, bevelSegments:3 };
+  const shape = new THREE.Shape();
+  const cuts = {
+    skinny:   {top:0.35,bot:0.18,hem:-1.15,gap:0.08},
+    straight: {top:0.38,bot:0.38,hem:-1.15,gap:0.08},
+    widel:    {top:0.42,bot:0.64,hem:-1.15,gap:0.1 },
+    bootcut:  {top:0.36,bot:0.5, hem:-1.15,gap:0.08},
+    cargo:    {top:0.4, bot:0.4, hem:-1.15,gap:0.1 },
+    dress:    {top:0.36,bot:0.32,hem:-1.15,gap:0.07},
+    jogger:   {top:0.44,bot:0.22,hem:-1.12,gap:0.1 },
+    shorts:   {top:0.4, bot:0.44,hem:-0.22,gap:0.1 },
+  };
+  const p = cuts[cutId] || cuts.straight;
+  const ww = 0.72;
+  shape.moveTo(-ww,1.08); shape.lineTo(ww,1.08);
+  shape.lineTo(ww,0.82); shape.quadraticCurveTo(ww+0.06,0.55,p.top+p.gap,0.48);
+  shape.lineTo(p.bot+p.gap,p.hem);
+  shape.lineTo(p.gap*0.3,p.hem); shape.quadraticCurveTo(0,-0.4,-p.gap*0.3,p.hem);
+  shape.lineTo(-p.bot-p.gap,p.hem); shape.lineTo(-p.top-p.gap,0.48);
+  shape.quadraticCurveTo(-ww-0.06,0.55,-ww,0.82); shape.lineTo(-ww,1.08);
+  const wb=new THREE.Path();
+  wb.moveTo(-(ww-0.04),1.04); wb.lineTo(ww-0.04,1.04); wb.lineTo(ww-0.04,0.86); wb.lineTo(-(ww-0.04),0.86); wb.lineTo(-(ww-0.04),1.04);
+  shape.holes.push(wb);
+  if (cutId==='cargo') {
+    const lp=new THREE.Path(); lp.moveTo(-(p.top+p.gap+0.08),0.1); lp.lineTo(-(p.top+p.gap+0.08),-0.32); lp.lineTo(-(p.gap+0.04),-0.32); lp.lineTo(-(p.gap+0.04),0.1); lp.lineTo(-(p.top+p.gap+0.08),0.1); shape.holes.push(lp);
+    const rp=new THREE.Path(); rp.moveTo(p.top+p.gap+0.08,0.1); rp.lineTo(p.top+p.gap+0.08,-0.32); rp.lineTo(p.gap+0.04,-0.32); rp.lineTo(p.gap+0.04,0.1); rp.lineTo(p.top+p.gap+0.08,0.1); shape.holes.push(rp);
+  }
+  return new THREE.ExtrudeGeometry(shape, bevel);
+}
+
+const FABRIC_PROPS = {
+  cotton:{roughness:0.85,metalness:0.0}, denim:{roughness:0.92,metalness:0.0},
+  linen:{roughness:0.95,metalness:0.0},  silk:{roughness:0.08,metalness:0.15},
+  polyester:{roughness:0.60,metalness:0.05}, velvet:{roughness:1.00,metalness:0.0},
+  leather:{roughness:0.30,metalness:0.10},   flannel:{roughness:0.98,metalness:0.0},
+};
+
+let vstate = {
+  shirtCutId:'tshirt', pantsCutId:'straight',
+  shirtFabricId:'cotton', pantsFabricId:'denim',
+  shirtColor:'#FFFFFF', pantsColor:'#1A237E',
+  showShirt:true, showPants:true, showMannequin:true,
+};
+
+let shirtMesh=null, pantsMesh=null;
+const shirtGroup=new THREE.Group(), pantsGroup=new THREE.Group();
+shirtGroup.position.y=1.1; pantsGroup.position.y=-1.25;
+
+function buildShirt() {
+  if (shirtMesh) { shirtGroup.remove(shirtMesh); shirtMesh.geometry.dispose(); shirtMesh.material.dispose(); }
+  const geo=buildShirtShape(vstate.shirtCutId); geo.center();
+  const fp=FABRIC_PROPS[vstate.shirtFabricId]||FABRIC_PROPS.cotton;
+  shirtMesh=new THREE.Mesh(geo, makeMaterial(vstate.shirtFabricId,vstate.shirtColor,fp.roughness,fp.metalness));
+  shirtMesh.castShadow=true; shirtMesh.receiveShadow=true;
+  shirtGroup.add(shirtMesh); shirtGroup.visible=vstate.showShirt;
+}
+function buildPants() {
+  if (pantsMesh) { pantsGroup.remove(pantsMesh); pantsMesh.geometry.dispose(); pantsMesh.material.dispose(); }
+  const geo=buildPantsShape(vstate.pantsCutId); geo.center();
+  const fp=FABRIC_PROPS[vstate.pantsFabricId]||FABRIC_PROPS.denim;
+  pantsMesh=new THREE.Mesh(geo, makeMaterial(vstate.pantsFabricId,vstate.pantsColor,fp.roughness,fp.metalness));
+  pantsMesh.castShadow=true; pantsMesh.receiveShadow=true;
+  pantsGroup.add(pantsMesh); pantsGroup.visible=vstate.showPants;
+}
+buildShirt(); buildPants();
+
+let isDragging=false, lastX=0, lastY=0, pinchDist=0;
+let rotX=0.08, rotY=0, zoom=5.5;
+const targetGroup=new THREE.Group();
+const mannequin=createMannequin();
+targetGroup.add(mannequin);
+targetGroup.add(shirtGroup);
+targetGroup.add(pantsGroup);
+scene.add(targetGroup);
+
+const cv=renderer.domElement;
+cv.addEventListener('pointerdown',e=>{isDragging=true;lastX=e.clientX;lastY=e.clientY;autoRotate=false;});
+cv.addEventListener('pointerup',()=>{isDragging=false;});
+cv.addEventListener('pointermove',e=>{
+  if(!isDragging)return;
+  rotY+=(e.clientX-lastX)*0.008; rotX+=(e.clientY-lastY)*0.005;
+  rotX=Math.max(-0.5,Math.min(0.5,rotX));
+  lastX=e.clientX; lastY=e.clientY;
+});
+cv.addEventListener('touchstart',e=>{if(e.touches.length===2)pinchDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);},{passive:true});
+cv.addEventListener('touchmove',e=>{
+  if(e.touches.length===2){
+    const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+    zoom+=(pinchDist-d)*0.02; zoom=Math.max(3,Math.min(10,zoom)); pinchDist=d;
+  }
+},{passive:true});
+cv.addEventListener('wheel',e=>{zoom+=e.deltaY*0.01;zoom=Math.max(3,Math.min(10,zoom));});
+
+function applyState(msg) {
+  let ns=false,np=false;
+  if(msg.shirtCutId!==undefined&&msg.shirtCutId!==vstate.shirtCutId){vstate.shirtCutId=msg.shirtCutId;ns=true;}
+  if(msg.pantsCutId!==undefined&&msg.pantsCutId!==vstate.pantsCutId){vstate.pantsCutId=msg.pantsCutId;np=true;}
+  if(msg.shirtFabricId!==undefined&&msg.shirtFabricId!==vstate.shirtFabricId){vstate.shirtFabricId=msg.shirtFabricId;ns=true;}
+  if(msg.pantsFabricId!==undefined&&msg.pantsFabricId!==vstate.pantsFabricId){vstate.pantsFabricId=msg.pantsFabricId;np=true;}
+  if(msg.shirtColor!==undefined&&msg.shirtColor!==vstate.shirtColor){vstate.shirtColor=msg.shirtColor;ns=true;}
+  if(msg.pantsColor!==undefined&&msg.pantsColor!==vstate.pantsColor){vstate.pantsColor=msg.pantsColor;np=true;}
+  if(msg.showShirt!==undefined){vstate.showShirt=msg.showShirt;if(shirtGroup)shirtGroup.visible=msg.showShirt;}
+  if(msg.showPants!==undefined){vstate.showPants=msg.showPants;if(pantsGroup)pantsGroup.visible=msg.showPants;}
+  if(msg.showMannequin!==undefined){vstate.showMannequin=msg.showMannequin;mannequin.visible=msg.showMannequin;}
+  if(ns)buildShirt(); if(np)buildPants();
+}
+
+window.addEventListener('message',e=>{
+  try {
+    const msg=JSON.parse(e.data);
+    if(msg.type==='update') applyState(msg);
+    if(msg.type==='capture'){
+      renderer.render(scene,camera);
+      window.parent.postMessage(JSON.stringify({type:'capture',data:renderer.domElement.toDataURL('image/png')}),'*');
+    }
+    if(msg.type==='reset'){rotX=0.08;rotY=0;zoom=5.5;}
+  } catch(_){}
+});
+
+window.parent.postMessage(JSON.stringify({type:'ready'}),'*');
+
+let autoRotate=true, autoT=0;
+
+function animate() {
+  requestAnimationFrame(animate);
+  if(autoRotate){autoT+=0.004;rotY=Math.sin(autoT)*0.4;}
+  targetGroup.rotation.y+=(rotY-targetGroup.rotation.y)*0.08;
+  targetGroup.rotation.x+=(rotX-targetGroup.rotation.x)*0.08;
+  camera.position.z+=(zoom-camera.position.z)*0.06;
+  renderer.render(scene,camera);
+}
+animate();
+<\/script>
+</body>
+</html>`;
+
+// ── Iframe bootstrap ──────────────────────────────────────────────────────────
+const iframe = document.getElementById('viewer-iframe');
+const overlay = document.getElementById('viewer-overlay');
+let viewerReady = false;
+
+(function loadViewer() {
+  const blob = new Blob([VIEWER_HTML], { type: 'text/html' });
+  iframe.src = URL.createObjectURL(blob);
+})();
+
+window.addEventListener('message', e => {
+  try {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'ready') {
+      viewerReady = true;
+      overlay.classList.add('hidden');
+      // Push initial state so viewer matches UI defaults
+      sendUpdate(state);
+    }
+    if (msg.type === 'capture' && msg.data) {
+      const a = document.createElement('a');
+      a.href = msg.data;
+      a.download = 'moda-' + Date.now() + '.png';
+      a.click();
+    }
+  } catch(_) {}
+});
+
+function sendUpdate(patch) {
+  if (!viewerReady) return;
+  iframe.contentWindow.postMessage(JSON.stringify({ type: 'update', ...patch }), '*');
+}
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+  });
+});
+
+// ── Build cut grids ───────────────────────────────────────────────────────────
+function buildCutGrid(containerId, cuts, stateKey, msgKey) {
+  const grid = document.getElementById(containerId);
+  cuts.forEach(cut => {
+    const btn = document.createElement('div');
+    btn.className = 'cut-btn' + (state[stateKey] === cut.id ? ' active' : '');
+    btn.innerHTML = `<span class="cut-emoji">${cut.emoji}</span><span class="cut-name">${cut.name}</span>`;
+    btn.addEventListener('click', () => {
+      grid.querySelectorAll('.cut-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state[stateKey] = cut.id;
+      sendUpdate({ [msgKey]: cut.id });
+    });
+    grid.appendChild(btn);
+  });
+}
+
+buildCutGrid('grid-shirt-cut', SHIRT_CUTS, 'shirtCutId', 'shirtCutId');
+buildCutGrid('grid-pants-cut', PANTS_CUTS, 'pantsCutId', 'pantsCutId');
+
+// ── Build fabric grids + swatches ─────────────────────────────────────────────
+function buildFabricSection(gridId, swatchId, stateKeyFabric, stateKeyColor) {
+  const grid = document.getElementById(gridId);
+  const swatchWrap = document.getElementById(swatchId);
+
+  function renderSwatches(fabric, selectedColor) {
+    swatchWrap.innerHTML = '';
+    fabric.colors.forEach(hex => {
+      const sw = document.createElement('div');
+      sw.className = 'swatch' + (selectedColor === hex ? ' active' : '');
+      sw.style.background = hex;
+      sw.title = hex;
+      sw.addEventListener('click', () => {
+        swatchWrap.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+        sw.classList.add('active');
+        state[stateKeyColor] = hex;
+        sendUpdate({ [stateKeyColor]: hex });
+      });
+      swatchWrap.appendChild(sw);
+    });
+  }
+
+  FABRICS.forEach(fab => {
+    const btn = document.createElement('div');
+    btn.className = 'fabric-btn' + (state[stateKeyFabric] === fab.id ? ' active' : '');
+    btn.innerHTML = `<span class="fab-emoji">${fab.emoji}</span><span class="fab-name">${fab.name}</span>`;
+    btn.addEventListener('click', () => {
+      grid.querySelectorAll('.fabric-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state[stateKeyFabric] = fab.id;
+      // Use first color if current color not in new fabric's palette
+      const col = fab.colors.includes(state[stateKeyColor]) ? state[stateKeyColor] : fab.colors[0];
+      state[stateKeyColor] = col;
+      sendUpdate({ [stateKeyFabric]: fab.id, [stateKeyColor]: col });
+      renderSwatches(fab, col);
+    });
+    grid.appendChild(btn);
+  });
+
+  const initFab = FABRICS.find(f => f.id === state[stateKeyFabric]) || FABRICS[0];
+  renderSwatches(initFab, state[stateKeyColor]);
+}
+
+buildFabricSection('grid-shirt-fabric', 'swatches-shirt', 'shirtFabricId', 'shirtColor');
+buildFabricSection('grid-pants-fabric', 'swatches-pants', 'pantsFabricId', 'pantsColor');
+
+// ── Toggles ───────────────────────────────────────────────────────────────────
+function setupToggle(labelId, stateKey) {
+  const label = document.getElementById(labelId);
+  const cb = label.querySelector('input');
+  cb.addEventListener('change', () => {
+    state[stateKey] = cb.checked;
+    label.classList.toggle('on', cb.checked);
+    sendUpdate({ [stateKey]: cb.checked });
+  });
+}
+
+setupToggle('tgl-shirt',     'showShirt');
+setupToggle('tgl-pants',     'showPants');
+setupToggle('tgl-mannequin', 'showMannequin');
+
+// ── Export PNG ────────────────────────────────────────────────────────────────
+document.getElementById('btn-export').addEventListener('click', () => {
+  if (!viewerReady) return;
+  iframe.contentWindow.postMessage(JSON.stringify({ type: 'capture' }), '*');
+});
+</script>
+</body>
+</html>
