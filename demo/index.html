@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MODA — 3D Fashion Design Studio</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #090B1E; color: #E0E8FF; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; overflow: hidden; }
+
+    #app { display: flex; flex-direction: column; height: 100vh; }
+
+    /* Top Bar */
+    #topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 20px; background: rgba(9,11,30,0.97);
+      border-bottom: 1px solid rgba(80,100,180,0.2); z-index: 20; gap: 12px;
+    }
+    #logo { font-size: 22px; font-weight: 900; letter-spacing: 6px; color: #fff; }
+    .project-name { color: #5060A0; font-size: 13px; }
+    .topbar-tools { display: flex; gap: 8px; }
+    .toggle-btn {
+      padding: 6px 12px; border-radius: 8px; border: 1px solid rgba(80,100,180,0.3);
+      background: rgba(30,40,80,0.6); color: #8090C0; font-size: 12px; cursor: pointer;
+      transition: all 0.2s;
+    }
+    .toggle-btn.active { background: rgba(233,69,96,0.25); border-color: #E94560; color: #FF8090; }
+    .toggle-btn:hover { border-color: rgba(233,69,96,0.5); }
+
+    /* Main Layout */
+    #main { display: flex; flex: 1; overflow: hidden; }
+
+    /* Left Tool Palette */
+    #toolpalette {
+      width: 52px; background: rgba(10,14,36,0.95); border-right: 1px solid rgba(80,100,180,0.15);
+      display: flex; flex-direction: column; align-items: center; padding: 12px 0; gap: 6px;
+    }
+    .tool {
+      width: 38px; height: 38px; border-radius: 10px; border: none;
+      background: transparent; color: #5060A0; font-size: 16px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+    }
+    .tool:hover { background: rgba(80,100,180,0.15); color: #8090C0; }
+    .tool.active { background: #E94560; color: #fff; }
+    .tool-sep { width: 28px; height: 1px; background: rgba(80,100,180,0.2); margin: 4px 0; }
+
+    /* 3D Viewport */
+    #viewport { flex: 1; position: relative; }
+    #canvas { width: 100%; height: 100%; display: block; }
+    .viewport-hint {
+      position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+      background: rgba(10,14,40,0.75); border: 1px solid rgba(80,100,180,0.2);
+      padding: 5px 14px; border-radius: 20px; font-size: 12px; color: #4050A0;
+      pointer-events: none;
+    }
+    .viewport-badge {
+      position: absolute; top: 14px; right: 14px;
+      background: rgba(10,14,40,0.85); border: 1px solid rgba(80,100,180,0.25);
+      padding: 6px 12px; border-radius: 10px; text-align: center;
+    }
+    .badge-val { font-size: 18px; font-weight: 800; color: #D0D8F0; }
+    .badge-lbl { font-size: 9px; color: #4050A0; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    /* Right Panel */
+    #panel {
+      width: 280px; background: rgba(8,10,26,0.98); border-left: 1px solid rgba(80,100,180,0.15);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+
+    /* Tabs */
+    .tab-bar {
+      display: flex; border-bottom: 1px solid rgba(80,100,180,0.15);
+    }
+    .tab {
+      flex: 1; padding: 10px 4px; text-align: center; cursor: pointer;
+      font-size: 11px; font-weight: 700; color: #4050A0; border: none;
+      background: transparent; transition: all 0.2s;
+    }
+    .tab.active { color: #E94560; border-bottom: 2px solid #E94560; }
+    .tab:hover:not(.active) { color: #7080A0; }
+
+    .tab-content { flex: 1; overflow-y: auto; display: none; }
+    .tab-content.active { display: block; }
+
+    /* Garment Panel */
+    .panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 14px; border-bottom: 1px solid rgba(80,100,180,0.12);
+    }
+    .panel-title { font-size: 13px; font-weight: 700; color: #C0C8E0; letter-spacing: 0.3px; }
+    .add-btn {
+      background: #E94560; color: #fff; border: none; border-radius: 8px;
+      padding: 5px 12px; font-size: 12px; font-weight: 700; cursor: pointer;
+    }
+    .add-btn:hover { background: #FF5070; }
+
+    .garment-list { padding: 8px; }
+    .garment-item {
+      display: flex; align-items: center; gap: 10px; padding: 10px 10px;
+      border-radius: 10px; cursor: pointer; transition: all 0.15s;
+      border: 1.5px solid transparent; margin-bottom: 4px;
+    }
+    .garment-item:hover { background: rgba(30,40,80,0.4); }
+    .garment-item.selected { background: rgba(233,69,96,0.12); border-color: rgba(233,69,96,0.3); }
+    .color-dot { width: 22px; height: 22px; border-radius: 11px; border: 2px solid rgba(255,255,255,0.15); flex-shrink: 0; }
+    .garment-info { flex: 1; }
+    .garment-name { font-size: 13px; font-weight: 600; color: #C0C8E0; }
+    .garment-mat { font-size: 11px; color: #5060A0; margin-top: 2px; }
+    .garment-actions { display: flex; gap: 2px; }
+    .action-btn { background: none; border: none; cursor: pointer; padding: 4px 6px; border-radius: 6px; font-size: 13px; }
+    .action-btn:hover { background: rgba(80,100,180,0.2); }
+
+    /* Garment type selector */
+    .garment-selector {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.65);
+      z-index: 100; align-items: flex-end; justify-content: center;
+    }
+    .garment-selector.open { display: flex; }
+    .selector-panel {
+      background: #0F1428; border-radius: 20px 20px 0 0; width: 100%; max-width: 600px;
+      padding: 20px 16px 40px; border: 1px solid rgba(100,120,200,0.2); border-bottom: none;
+    }
+    .selector-title { font-size: 17px; font-weight: 700; color: #E0E8FF; margin-bottom: 16px; padding: 0 4px; }
+    .garment-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .garment-option {
+      display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 12px;
+      background: rgba(20,28,60,0.7); border: 1px solid rgba(80,100,180,0.15);
+      cursor: pointer; transition: all 0.15s;
+    }
+    .garment-option:hover { border-color: rgba(233,69,96,0.4); background: rgba(233,69,96,0.08); }
+    .go-icon { font-size: 26px; }
+    .go-name { font-size: 14px; font-weight: 600; color: #C0C8E0; }
+    .go-desc { font-size: 11px; color: #4050A0; }
+
+    /* Fabric panel */
+    .fabric-cats { display: flex; gap: 6px; padding: 10px 12px; overflow-x: auto; border-bottom: 1px solid rgba(80,100,180,0.12); }
+    .cat-chip {
+      padding: 4px 12px; border-radius: 20px; border: 1px solid rgba(80,100,180,0.2);
+      background: rgba(25,35,70,0.5); color: #5060A0; font-size: 11px; font-weight: 700;
+      cursor: pointer; white-space: nowrap; transition: all 0.15s;
+    }
+    .cat-chip.active { background: #E94560; border-color: #E94560; color: #fff; }
+    .fabric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px; }
+    .fabric-card {
+      border-radius: 12px; overflow: hidden; border: 1.5px solid rgba(60,80,150,0.2);
+      background: rgba(12,16,42,0.8); cursor: pointer; transition: all 0.15s;
+    }
+    .fabric-card:hover { border-color: rgba(233,69,96,0.4); }
+    .fabric-card.applied { border-color: #E94560; }
+    .fabric-swatch { height: 70px; position: relative; overflow: hidden; }
+    .fabric-info { padding: 8px; }
+    .fabric-name { font-size: 11px; font-weight: 700; color: #C0C8E0; }
+    .fabric-cat { font-size: 10px; color: #4050A0; text-transform: capitalize; }
+
+    /* Avatar/Settings panel */
+    .settings-section { padding: 12px 14px; }
+    .section-title { font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #5060A0; margin-bottom: 14px; }
+    .measure-row { background: rgba(12,18,50,0.7); border-radius: 12px; padding: 12px; margin-bottom: 8px; border: 1px solid rgba(80,100,180,0.12); }
+    .measure-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .measure-lbl { flex: 1; font-size: 13px; font-weight: 600; color: #B0B8D0; }
+    .measure-val { font-size: 15px; font-weight: 800; color: #E94560; }
+    .measure-unit { font-size: 10px; color: #803040; }
+    input[type=range] { width: 100%; accent-color: #E94560; }
+    .preset-grid { display: flex; gap: 8px; flex-wrap: wrap; }
+    .preset-btn {
+      padding: 10px 16px; background: rgba(15,22,60,0.7); border: 1px solid rgba(80,100,200,0.2);
+      border-radius: 10px; color: #7080A0; font-size: 13px; font-weight: 800; cursor: pointer;
+    }
+    .preset-btn:hover { border-color: #E94560; color: #FF8090; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(80,100,180,0.3); border-radius: 2px; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <!-- Top Bar -->
+  <div id="topbar">
+    <div style="display:flex;align-items:center;gap:14px">
+      <span id="logo">MODA</span>
+      <span class="project-name">Summer Collection</span>
+    </div>
+    <div class="topbar-tools">
+      <button class="toggle-btn active" id="btn-grid" onclick="toggleGrid()">⊞ Grid</button>
+      <button class="toggle-btn" id="btn-wire" onclick="toggleWireframe()">⬡ Wire</button>
+      <button class="toggle-btn active" id="btn-avatar" onclick="toggleAvatar()">🧍 Avatar</button>
+    </div>
+  </div>
+
+  <div id="main">
+    <!-- Tool Palette -->
+    <div id="toolpalette">
+      <button class="tool active" title="Select" onclick="setTool(this)">↖</button>
+      <button class="tool" title="Move" onclick="setTool(this)">✥</button>
+      <button class="tool" title="Rotate" onclick="setTool(this)">↻</button>
+      <button class="tool" title="Scale" onclick="setTool(this)">⤡</button>
+      <div class="tool-sep"></div>
+      <button class="tool" title="Measure" onclick="setTool(this)">📏</button>
+      <button class="tool" title="Pin" onclick="setTool(this)">📌</button>
+      <div class="tool-sep"></div>
+      <button class="tool" title="Camera" onclick="setTool(this)">🎥</button>
+    </div>
+
+    <!-- 3D Viewport -->
+    <div id="viewport">
+      <canvas id="canvas"></canvas>
+      <div class="viewport-hint">Drag to orbit · Scroll to zoom</div>
+      <div class="viewport-badge">
+        <div class="badge-val" id="garment-count">0</div>
+        <div class="badge-lbl">Garments</div>
+      </div>
+    </div>
+
+    <!-- Right Panel -->
+    <div id="panel">
+      <div class="tab-bar">
+        <button class="tab active" onclick="showTab('garments',this)">Garments</button>
+        <button class="tab" onclick="showTab('fabric',this)">Fabric</button>
+        <button class="tab" onclick="showTab('avatar',this)">Avatar</button>
+      </div>
+
+      <!-- Garments Tab -->
+      <div class="tab-content active" id="tab-garments">
+        <div class="panel-header">
+          <span class="panel-title">Garments</span>
+          <button class="add-btn" onclick="openSelector()">+ Add</button>
+        </div>
+        <div class="garment-list" id="garment-list">
+          <p style="color:#405080;font-size:13px;text-align:center;margin-top:24px;padding:0 16px">
+            Tap "+ Add" to add your first garment
+          </p>
+        </div>
+      </div>
+
+      <!-- Fabric Tab -->
+      <div class="tab-content" id="tab-fabric">
+        <div class="fabric-cats" id="fabric-cats"></div>
+        <div id="fabric-banner" style="padding:8px 14px;font-size:12px;color:#6070A0;border-bottom:1px solid rgba(80,100,180,0.1)">
+          Select a garment first to apply fabric
+        </div>
+        <div class="fabric-grid" id="fabric-grid"></div>
+      </div>
+
+      <!-- Avatar Tab -->
+      <div class="tab-content" id="tab-avatar">
+        <div class="settings-section">
+          <div class="section-title">Body Measurements</div>
+          <div id="measure-sliders"></div>
+        </div>
+        <div class="settings-section">
+          <div class="section-title">Body Presets</div>
+          <div class="preset-grid">
+            <button class="preset-btn" onclick="applyPreset(162,76,58,82)">XS</button>
+            <button class="preset-btn" onclick="applyPreset(165,82,62,88)">S</button>
+            <button class="preset-btn" onclick="applyPreset(170,86,66,92)">M</button>
+            <button class="preset-btn" onclick="applyPreset(172,94,74,100)">L</button>
+            <button class="preset-btn" onclick="applyPreset(174,102,82,108)">XL</button>
+            <button class="preset-btn" onclick="applyPreset(175,112,92,118)">XXL</button>
+          </div>
+        </div>
+        <div class="settings-section">
+          <div class="section-title">Lighting</div>
+          <div class="measure-row">
+            <div class="measure-header">
+              <span class="measure-lbl">💡 Ambient Light</span>
+              <span class="measure-val" id="light-val">60<span class="measure-unit">%</span></span>
+            </div>
+            <input type="range" min="0" max="150" value="60" oninput="setAmbient(this.value)">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Garment Selector -->
+<div class="garment-selector" id="garment-selector" onclick="if(event.target===this)closeSelector()">
+  <div class="selector-panel">
+    <div class="selector-title">Choose Garment Type</div>
+    <div class="garment-grid" id="garment-grid"></div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.162.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.162.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+// ─── State ───────────────────────────────────────────────────────────────────
+const state = {
+  garments: [],
+  selectedId: null,
+  showGrid: true,
+  showWireframe: false,
+  showAvatar: true,
+  avatar: { height:170, bust:86, waist:66, hips:92, shoulder:38, inseam:76 },
+  ambientLight: 0.6,
+};
+let garmentCounter = 1;
+
+// ─── Fabric Data ─────────────────────────────────────────────────────────────
+const FABRICS = [
+  { id:'cotton-white', name:'Cotton White', color:'#F5F5F0', roughness:0.85, metalness:0, weight:'medium', category:'cotton' },
+  { id:'cotton-black', name:'Cotton Black', color:'#1A1A1A', roughness:0.85, metalness:0, weight:'medium', category:'cotton' },
+  { id:'cotton-navy', name:'Navy Cotton', color:'#1B3A6B', roughness:0.82, metalness:0, weight:'medium', category:'cotton' },
+  { id:'cotton-coral', name:'Coral Cotton', color:'#FF6B6B', roughness:0.82, metalness:0, weight:'medium', category:'cotton' },
+  { id:'silk-ivory', name:'Silk Ivory', color:'#FFF8E7', roughness:0.2, metalness:0.1, weight:'light', category:'silk' },
+  { id:'silk-black', name:'Silk Black', color:'#0D0D0D', roughness:0.15, metalness:0.15, weight:'light', category:'silk' },
+  { id:'silk-red', name:'Silk Red', color:'#C41E3A', roughness:0.2, metalness:0.1, weight:'light', category:'silk' },
+  { id:'silk-emerald', name:'Emerald Silk', color:'#2ECC71', roughness:0.18, metalness:0.12, weight:'light', category:'silk' },
+  { id:'denim-blue', name:'Classic Denim', color:'#4A7AB5', roughness:0.95, metalness:0, weight:'heavy', category:'denim' },
+  { id:'denim-dark', name:'Dark Denim', color:'#2B3A52', roughness:0.95, metalness:0, weight:'heavy', category:'denim' },
+  { id:'leather-black', name:'Black Leather', color:'#1C1C1C', roughness:0.3, metalness:0.05, weight:'heavy', category:'leather' },
+  { id:'leather-brown', name:'Tan Leather', color:'#C4873A', roughness:0.35, metalness:0.05, weight:'heavy', category:'leather' },
+  { id:'wool-gray', name:'Gray Wool', color:'#8A8A8A', roughness:0.95, metalness:0, weight:'heavy', category:'wool' },
+  { id:'wool-camel', name:'Camel Wool', color:'#C19A6B', roughness:0.9, metalness:0, weight:'heavy', category:'wool' },
+  { id:'synthetic-teal', name:'Stretch Teal', color:'#008080', roughness:0.6, metalness:0.05, weight:'light', category:'synthetic' },
+];
+
+const GARMENT_TYPES = [
+  { type:'tshirt', name:'T-Shirt', desc:'Classic crew neck tee', icon:'👕' },
+  { type:'blouse', name:'Blouse', desc:'Elegant fitted blouse', icon:'👔' },
+  { type:'jacket', name:'Jacket', desc:'Structured outer jacket', icon:'🧥' },
+  { type:'coat', name:'Coat', desc:'Long flowing coat', icon:'🧥' },
+  { type:'dress', name:'Dress', desc:'Full-length dress', icon:'👗' },
+  { type:'skirt', name:'Skirt', desc:'A-line or pencil skirt', icon:'👗' },
+  { type:'pants', name:'Pants', desc:'Tailored trousers', icon:'👖' },
+];
+
+// ─── Three.js Setup ──────────────────────────────────────────────────────────
+const canvas = document.getElementById('canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.setClearColor(0x090B1E);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x090B1E, 0.1);
+
+const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 100);
+const camState = { theta:0, phi:Math.PI/6, radius:3.2, target:new THREE.Vector3(0,0.85,0) };
+
+function updateCamera() {
+  const {theta, phi, radius, target} = camState;
+  camera.position.set(
+    radius * Math.sin(phi) * Math.sin(theta) + target.x,
+    radius * Math.cos(phi) + target.y,
+    radius * Math.sin(phi) * Math.cos(theta) + target.z
+  );
+  camera.lookAt(target);
+}
+updateCamera();
+
+// Lighting
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+scene.add(ambientLight);
+const keyLight = new THREE.DirectionalLight(0xfff5e0, 1.4);
+keyLight.position.set(2, 4, 3); keyLight.castShadow = true;
+keyLight.shadow.mapSize.set(1024,1024);
+scene.add(keyLight);
+const fillLight = new THREE.DirectionalLight(0xe0f0ff, 0.6);
+fillLight.position.set(-2, 2, -1); scene.add(fillLight);
+const rimLight = new THREE.DirectionalLight(0xffffff, 0.4);
+rimLight.position.set(0, 3, -3); scene.add(rimLight);
+
+// Grid
+const grid = new THREE.GridHelper(4, 20, 0x333355, 0x222244);
+grid.position.y = -0.05; scene.add(grid);
+
+// Ground
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(10,10),
+  new THREE.MeshStandardMaterial({ color:0x090B1E, roughness:1, transparent:true, opacity:0 })
+);
+ground.rotation.x = -Math.PI/2; ground.receiveShadow = true; scene.add(ground);
+
+// ─── Avatar Builder ──────────────────────────────────────────────────────────
+let avatarGroup = null;
+
+function buildAvatar() {
+  const m = state.avatar;
+  const s = m.height / 170;
+  const bust = m.bust / 86;
+  const hips = m.hips / 92;
+  const shoulder = m.shoulder / 38;
+
+  if (avatarGroup) scene.remove(avatarGroup);
+  if (!state.showAvatar) { avatarGroup = null; return; }
+
+  const group = new THREE.Group();
+  const skin = new THREE.MeshStandardMaterial({ color:0xFFD7C4, roughness:0.8 });
+
+  const add = (geo, x, y, z, rx=0, rz=0) => {
+    const m = new THREE.Mesh(geo, skin.clone());
+    m.position.set(x, y, z);
+    m.rotation.set(rx, 0, rz);
+    m.castShadow = true;
+    group.add(m);
+    return m;
+  };
+
+  // Head
+  add(new THREE.SphereGeometry(0.115*s,32,24), 0, 1.66*s, 0);
+  // Neck
+  add(new THREE.CylinderGeometry(0.05*s,0.058*s,0.1*s,16), 0, 1.52*s, 0);
+  // Torso upper (chest)
+  const bw = 0.22 * bust * s;
+  add(new THREE.CapsuleGeometry(0.1*bust*s, bw*0.7, 8, 16), 0, 1.25*s, 0, 0, Math.PI/2);
+  // Waist
+  const ww = (m.waist/66)*0.075*s;
+  add(new THREE.CylinderGeometry(ww, ww*1.1, 0.18*s, 20), 0, 0.97*s, 0);
+  // Hips
+  const hw = 0.19 * hips * s;
+  add(new THREE.CapsuleGeometry(hw*0.6, hw*1.1, 8, 16), 0, 0.82*s, 0, 0, Math.PI/2);
+  // Arms
+  const ar = Math.PI/14;
+  add(new THREE.CylinderGeometry(0.062*s,0.055*s,0.3*s,16), -0.31*shoulder*s, 1.26*s, 0, 0, ar);
+  add(new THREE.CylinderGeometry(0.062*s,0.055*s,0.3*s,16),  0.31*shoulder*s, 1.26*s, 0, 0, -ar);
+  add(new THREE.CylinderGeometry(0.048*s,0.042*s,0.28*s,16), -0.34*s, 0.96*s, 0);
+  add(new THREE.CylinderGeometry(0.048*s,0.042*s,0.28*s,16),  0.34*s, 0.96*s, 0);
+  add(new THREE.SphereGeometry(0.042*s,12,12), -0.35*s, 0.79*s, 0);
+  add(new THREE.SphereGeometry(0.042*s,12,12),  0.35*s, 0.79*s, 0);
+  // Legs
+  const il = m.inseam / 76;
+  add(new THREE.CylinderGeometry(0.1*s,0.085*s,0.38*s,20), -0.12*s, 0.48*s, 0);
+  add(new THREE.CylinderGeometry(0.1*s,0.085*s,0.38*s,20),  0.12*s, 0.48*s, 0);
+  add(new THREE.CylinderGeometry(0.072*s,0.06*s,0.38*s*il,16), -0.12*s, 0.1*s, 0);
+  add(new THREE.CylinderGeometry(0.072*s,0.06*s,0.38*s*il,16),  0.12*s, 0.1*s, 0);
+  add(new THREE.BoxGeometry(0.08*s,0.05*s,0.18*s), -0.12*s, -0.08*s, 0.04*s);
+  add(new THREE.BoxGeometry(0.08*s,0.05*s,0.18*s),  0.12*s, -0.08*s, 0.04*s);
+  // Eyes
+  const eyeM = new THREE.MeshStandardMaterial({ color:0x2C3E50 });
+  [-1,1].forEach(sign => {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.016*s,8,8), eyeM);
+    eye.position.set(sign*0.038*s, 1.675*s, 0.1*s);
+    group.add(eye);
+  });
+
+  group.position.y = 0.1;
+  avatarGroup = group;
+  scene.add(group);
+}
+
+// ─── Garment Builder ─────────────────────────────────────────────────────────
+const garmentMeshes = {};
+
+function makeMat(fabric, wire=false) {
+  return new THREE.MeshStandardMaterial({
+    color: new THREE.Color(fabric.color),
+    roughness: fabric.roughness,
+    metalness: fabric.metalness,
+    wireframe: wire,
+    side: THREE.DoubleSide,
+  });
+}
+
+function buildTShirt(g) {
+  const s = state.avatar.height/170, bust = state.avatar.bust/86;
+  const group = new THREE.Group();
+  const mat = makeMat(g.fabric, state.showWireframe);
+  const hw = 0.195*bust*s, d = 0.11*bust*s;
+
+  const shape = new THREE.Shape();
+  shape.moveTo(-hw,0);
+  shape.quadraticCurveTo(-hw*1.05, 0.22*s, -hw*0.92, 0.45*s);
+  shape.lineTo(hw*0.92, 0.45*s);
+  shape.quadraticCurveTo(hw*1.05, 0.22*s, hw, 0);
+  shape.closePath();
+  const body = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(shape, {depth:d*2, bevelEnabled:false}),
+    mat
+  );
+  body.position.set(-hw, 0.77*s, -d);
+  group.add(body);
+
+  // Sleeves
+  const sleeveShape = new THREE.Shape();
+  sleeveShape.moveTo(0,0); sleeveShape.lineTo(0.16*s,0.06*s);
+  sleeveShape.lineTo(0.18*s,0.14*s); sleeveShape.lineTo(0.02*s,0.15*s); sleeveShape.closePath();
+  const sleeveGeo = new THREE.ExtrudeGeometry(sleeveShape, {depth:0.1*s, bevelEnabled:false});
+
+  [-1,1].forEach(sign => {
+    const sl = new THREE.Mesh(sleeveGeo.clone(), mat.clone());
+    sl.position.set(sign>0 ? hw*0.85 : -hw*1.0, 1.12*s, -0.05*s);
+    sl.rotation.z = sign*Math.PI/8;
+    group.add(sl);
+  });
+  return group;
+}
+
+function buildBlouse(g) {
+  const s = state.avatar.height/170, bust = state.avatar.bust/86;
+  const group = new THREE.Group();
+  const mat = makeMat(g.fabric, state.showWireframe);
+  const hw = 0.185*bust*s, d = 0.105*s;
+
+  const shape = new THREE.Shape();
+  shape.moveTo(-hw,0);
+  shape.quadraticCurveTo(-hw*1.03, 0.21*s, -hw*0.92, 0.42*s);
+  shape.lineTo(hw*0.92, 0.42*s);
+  shape.quadraticCurveTo(hw*1.03, 0.21*s, hw, 0);
+  shape.closePath();
+  const body = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(shape, {depth:d*2, bevelEnabled:false}), mat
+  );
+  body.position.set(-hw, 0.77*s, -d);
+  group.add(body);
+
+  [-1,1].forEach(sign => {
+    const path = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(sign*hw*0.98, 1.15*s, 0),
+      new THREE.Vector3(sign*(hw+0.12*s), 1.0*s, 0),
+      new THREE.Vector3(sign*(hw+0.17*s), 0.78*s, 0),
+    ]);
+    group.add(new THREE.Mesh(new THREE.TubeGeometry(path,14,0.055*s,10,false), mat.clone()));
+  });
+  return group;
+}
+
+function buildPants(g) {
+  const s = state.avatar.height/170, hip = state.avatar.hips/92;
+  const group = new THREE.Group();
+  const mat = makeMat(g.fabric, state.showWireframe);
+  const lr = 0.075*s*hip;
+
+  [-1,1].forEach(sign => {
+    const path = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(sign*0.12*s, 0.82*s, 0),
+      new THREE.Vector3(sign*0.13*s, 0.5*s, 0),
+      new THREE.Vector3(sign*0.125*s, 0.1*s, 0),
+      new THREE.Vector3(sign*0.12*s, -0.08*s, 0),
+    ]);
+    group.add(new THREE.Mesh(new THREE.TubeGeometry(path,24,lr,14,false), mat.clone()));
+  });
+
+  const waist = new THREE.Mesh(
+    new THREE.TorusGeometry(0.17*s*hip, 0.025*s, 8, 32), mat.clone()
+  );
+  waist.position.set(0, 0.82*s, 0); waist.rotation.x = Math.PI/2;
+  group.add(waist);
+  return group;
+}
+
+function buildDress(g) {
+  const s = state.avatar.height/170;
+  const bust = state.avatar.bust/86, hip = state.avatar.hips/92;
+  const group = new THREE.Group();
+  const mat = makeMat(g.fabric, state.showWireframe);
+  const bw = 0.195*bust*s;
+
+  const bodice = new THREE.Shape();
+  bodice.moveTo(-bw,0);
+  bodice.quadraticCurveTo(-bw*1.02, 0.17*s, -bw*0.85, 0.32*s);
+  bodice.lineTo(bw*0.85, 0.32*s);
+  bodice.quadraticCurveTo(bw*1.02, 0.17*s, bw, 0);
+  bodice.closePath();
+  const bMesh = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(bodice, {depth:0.2*s, bevelEnabled:false}), mat
+  );
+  bMesh.position.set(-bw, 0.82*s, -0.1*s);
+  group.add(bMesh);
+
+  const skirt = new THREE.Mesh(
+    new THREE.LatheGeometry([
+      new THREE.Vector2(0.18*s*hip, 0.82*s),
+      new THREE.Vector2(0.2*s*hip, 0.6*s),
+      new THREE.Vector2(0.28*s*hip, 0.3*s),
+      new THREE.Vector2(0.35*s*hip, 0),
+    ], 32), mat.clone()
+  );
+  group.add(skirt);
+  return group;
+}
+
+function buildSkirt(g) {
+  const s = state.avatar.height/170, hip = state.avatar.hips/92;
+  const group = new THREE.Group();
+  const mat = makeMat(g.fabric, state.showWireframe);
+
+  group.add(new THREE.Mesh(
+    new THREE.LatheGeometry([
+      new THREE.Vector2(0.19*s*hip, 0.82*s),
+      new THREE.Vector2(0.21*s*hip, 0.55*s),
+      new THREE.Vector2(0.25*s*hip, 0.25*s),
+      new THREE.Vector2(0.27*s*hip, 0),
+    ], 32), mat
+  ));
+  const waist = new THREE.Mesh(
+    new THREE.TorusGeometry(0.195*s*hip, 0.022*s, 8, 32), mat.clone()
+  );
+  waist.position.set(0, 0.82*s, 0); waist.rotation.x = Math.PI/2;
+  group.add(waist);
+  return group;
+}
+
+function buildJacket(g) {
+  const s = state.avatar.height/170, bust = state.avatar.bust/86;
+  const group = new THREE.Group();
+  const mat = makeMat(g.fabric, state.showWireframe);
+  const hw = 0.21*bust*s, d = 0.12*s;
+
+  const shape = new THREE.Shape();
+  shape.moveTo(-hw,0); shape.lineTo(-hw*1.22, 0.08*s); shape.lineTo(-hw*1.1, 0.52*s);
+  shape.lineTo(-hw*0.1, 0.55*s); shape.lineTo(hw*0.1, 0.55*s);
+  shape.lineTo(hw*1.1, 0.52*s); shape.lineTo(hw*1.22, 0.08*s); shape.lineTo(hw, 0);
+  shape.closePath();
+  const body = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(shape, {depth:d*2, bevelEnabled:false}), mat
+  );
+  body.position.set(-hw, 0.74*s, -d);
+  group.add(body);
+
+  [-1,1].forEach(sign => {
+    const path = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(sign*hw*1.1, 1.22*s, 0),
+      new THREE.Vector3(sign*(hw*1.1+0.1*s), 1.0*s, 0),
+      new THREE.Vector3(sign*(hw*1.1+0.15*s), 0.75*s, 0),
+    ]);
+    group.add(new THREE.Mesh(new THREE.TubeGeometry(path,16,0.065*s,12,false), mat.clone()));
+  });
+  return group;
+}
+
+function buildCoat(g) {
+  const s = state.avatar.height/170, bust = state.avatar.bust/86;
+  const group = new THREE.Group();
+  const mat = makeMat(g.fabric, state.showWireframe);
+  const hw = 0.22*bust*s, d = 0.13*s;
+
+  const shape = new THREE.Shape();
+  shape.moveTo(-hw*0.85,0); shape.lineTo(-hw*1.2,0.12*s);
+  shape.lineTo(-hw*1.05, 0.95*s); shape.lineTo(hw*1.05, 0.95*s);
+  shape.lineTo(hw*1.2, 0.12*s); shape.lineTo(hw*0.85, 0);
+  shape.closePath();
+  const body = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(shape, {depth:d*2, bevelEnabled:false}), mat
+  );
+  body.position.set(-hw*0.85, 0.2*s, -d);
+  group.add(body);
+
+  [-1,1].forEach(sign => {
+    const path = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(sign*hw*1.1, 1.22*s, 0),
+      new THREE.Vector3(sign*(hw*1.15+0.1*s), 0.95*s, 0),
+      new THREE.Vector3(sign*(hw*1.15+0.16*s), 0.68*s, 0),
+    ]);
+    group.add(new THREE.Mesh(new THREE.TubeGeometry(path,16,0.075*s,12,false), mat.clone()));
+  });
+  return group;
+}
+
+function buildGarmentMesh(g) {
+  switch(g.type) {
+    case 'tshirt': return buildTShirt(g);
+    case 'blouse': return buildBlouse(g);
+    case 'pants': return buildPants(g);
+    case 'dress': return buildDress(g);
+    case 'skirt': return buildSkirt(g);
+    case 'jacket': return buildJacket(g);
+    case 'coat': return buildCoat(g);
+    default: return buildTShirt(g);
+  }
+}
+
+function garmentGroup() {
+  return scene.children.find(c => c.userData.isGarmentGroup);
+}
+
+function rebuildGarments() {
+  const old = garmentGroup();
+  if (old) scene.remove(old);
+  const group = new THREE.Group();
+  group.userData.isGarmentGroup = true;
+  state.garments.filter(g=>g.visible).forEach(g => {
+    const mesh = buildGarmentMesh(g);
+    mesh.userData.garmentId = g.id;
+    group.add(mesh);
+  });
+  scene.add(group);
+}
+
+// ─── Resize ──────────────────────────────────────────────────────────────────
+function resize() {
+  const vp = document.getElementById('viewport');
+  const w = vp.clientWidth, h = vp.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ─── Mouse / Touch Orbit ─────────────────────────────────────────────────────
+let dragging = false, lastX=0, lastY=0;
+canvas.addEventListener('mousedown', e=>{ dragging=true; lastX=e.clientX; lastY=e.clientY; });
+window.addEventListener('mouseup', ()=>{ dragging=false; });
+window.addEventListener('mousemove', e=>{
+  if(!dragging) return;
+  const dx=e.clientX-lastX, dy=e.clientY-lastY;
+  camState.theta -= dx*0.008; camState.phi = Math.max(0.1, Math.min(Math.PI*0.85, camState.phi - dy*0.006));
+  lastX=e.clientX; lastY=e.clientY; updateCamera();
+});
+canvas.addEventListener('wheel', e=>{
+  camState.radius = Math.max(1.2, Math.min(7, camState.radius + e.deltaY*0.005));
+  updateCamera(); e.preventDefault();
+}, {passive:false});
+
+// ─── Render Loop ─────────────────────────────────────────────────────────────
+function animate() {
+  requestAnimationFrame(animate);
+  renderer.render(scene, camera);
+}
+animate();
+buildAvatar();
+
+// ─── UI Logic (exposed globally) ─────────────────────────────────────────────
+
+window.showTab = function(name, btn) {
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  btn.classList.add('active');
+};
+
+window.setTool = function(btn) {
+  document.querySelectorAll('.tool').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+};
+
+window.toggleGrid = function() {
+  state.showGrid = !state.showGrid;
+  grid.visible = state.showGrid;
+  document.getElementById('btn-grid').classList.toggle('active', state.showGrid);
+};
+
+window.toggleWireframe = function() {
+  state.showWireframe = !state.showWireframe;
+  document.getElementById('btn-wire').classList.toggle('active', state.showWireframe);
+  rebuildGarments();
+};
+
+window.toggleAvatar = function() {
+  state.showAvatar = !state.showAvatar;
+  document.getElementById('btn-avatar').classList.toggle('active', state.showAvatar);
+  buildAvatar();
+};
+
+window.setAmbient = function(val) {
+  state.ambientLight = val/100;
+  ambientLight.intensity = val/100;
+  document.getElementById('light-val').innerHTML = val+'<span class="measure-unit">%</span>';
+};
+
+window.applyPreset = function(h,b,w,hi) {
+  state.avatar.height=h; state.avatar.bust=b; state.avatar.waist=w; state.avatar.hips=hi;
+  updateMeasureSliders();
+  buildAvatar(); rebuildGarments();
+};
+
+// ─── Garment List UI ─────────────────────────────────────────────────────────
+function renderGarmentList() {
+  const list = document.getElementById('garment-list');
+  document.getElementById('garment-count').textContent = state.garments.length;
+  if (state.garments.length === 0) {
+    list.innerHTML = '<p style="color:#405080;font-size:13px;text-align:center;margin-top:24px;padding:0 16px">Tap "+ Add" to add your first garment</p>';
+    return;
+  }
+  list.innerHTML = state.garments.map(g => `
+    <div class="garment-item ${state.selectedId===g.id?'selected':''}" onclick="selectGarment('${g.id}')">
+      <div class="color-dot" style="background:${g.fabric.color}"></div>
+      <div class="garment-info">
+        <div class="garment-name">${g.name}</div>
+        <div class="garment-mat">${g.fabric.name}</div>
+      </div>
+      <div class="garment-actions">
+        <button class="action-btn" onclick="event.stopPropagation();toggleVisible('${g.id}')">${g.visible?'👁':'🚫'}</button>
+        <button class="action-btn" onclick="event.stopPropagation();openFabricForGarment('${g.id}')">🎨</button>
+        <button class="action-btn" onclick="event.stopPropagation();removeGarment('${g.id}')">🗑</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+window.selectGarment = function(id) {
+  state.selectedId = state.selectedId===id ? null : id;
+  renderGarmentList();
+  updateFabricBanner();
+};
+
+window.toggleVisible = function(id) {
+  const g = state.garments.find(x=>x.id===id);
+  if (g) { g.visible=!g.visible; rebuildGarments(); renderGarmentList(); }
+};
+
+window.removeGarment = function(id) {
+  state.garments = state.garments.filter(x=>x.id!==id);
+  if (state.selectedId===id) state.selectedId=null;
+  rebuildGarments(); renderGarmentList(); updateFabricBanner();
+};
+
+// ─── Garment Selector ────────────────────────────────────────────────────────
+window.openSelector = function() {
+  const grid = document.getElementById('garment-grid');
+  grid.innerHTML = GARMENT_TYPES.map(t=>`
+    <div class="garment-option" onclick="addGarment('${t.type}')">
+      <div class="go-icon">${t.icon}</div>
+      <div>
+        <div class="go-name">${t.name}</div>
+        <div class="go-desc">${t.desc}</div>
+      </div>
+    </div>
+  `).join('');
+  document.getElementById('garment-selector').classList.add('open');
+};
+
+window.closeSelector = function() {
+  document.getElementById('garment-selector').classList.remove('open');
+};
+
+window.addGarment = function(type) {
+  const fabric = FABRICS[Math.floor(Math.random()*4)];
+  const g = { id:'g-'+Date.now(), type, name:type.charAt(0).toUpperCase()+type.slice(1)+' '+(++garmentCounter), fabric, visible:true };
+  state.garments.push(g);
+  state.selectedId = g.id;
+  closeSelector(); rebuildGarments(); renderGarmentList(); updateFabricBanner();
+};
+
+// ─── Fabric Library UI ───────────────────────────────────────────────────────
+let activeFabricCat = 'all';
+
+function renderFabricGrid() {
+  const cats = ['all','cotton','silk','denim','leather','wool','synthetic'];
+  const catEl = document.getElementById('fabric-cats');
+  catEl.innerHTML = cats.map(c=>`
+    <div class="cat-chip ${activeFabricCat===c?'active':''}" onclick="setFabricCat('${c}')">${c==='all'?'All':c.charAt(0).toUpperCase()+c.slice(1)}</div>
+  `).join('');
+
+  const filtered = activeFabricCat==='all' ? FABRICS : FABRICS.filter(f=>f.category===activeFabricCat);
+  const selectedGarment = state.garments.find(g=>g.id===state.selectedId);
+  const grid = document.getElementById('fabric-grid');
+  grid.innerHTML = filtered.map(f=>`
+    <div class="fabric-card ${selectedGarment?.fabric.id===f.id?'applied':''}" onclick="applyFabric('${f.id}')">
+      <div class="fabric-swatch" style="background:${f.color}"></div>
+      <div class="fabric-info">
+        <div class="fabric-name">${f.name}</div>
+        <div class="fabric-cat">${f.category} · ${f.weight}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+window.setFabricCat = function(cat) {
+  activeFabricCat=cat; renderFabricGrid();
+};
+
+window.applyFabric = function(fabricId) {
+  if (!state.selectedId) return;
+  const g = state.garments.find(x=>x.id===state.selectedId);
+  const f = FABRICS.find(x=>x.id===fabricId);
+  if (g && f) { g.fabric=f; rebuildGarments(); renderGarmentList(); renderFabricGrid(); }
+};
+
+window.openFabricForGarment = function(id) {
+  state.selectedId=id;
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-fabric').classList.add('active');
+  document.querySelectorAll('.tab')[1].classList.add('active');
+  updateFabricBanner(); renderFabricGrid();
+};
+
+function updateFabricBanner() {
+  const banner = document.getElementById('fabric-banner');
+  const g = state.garments.find(x=>x.id===state.selectedId);
+  if (g) {
+    banner.innerHTML = `Applying to: <strong style="color:#E0C0C8">${g.name}</strong>`;
+    banner.style.color = '#A090B0';
+  } else {
+    banner.textContent = 'Select a garment first to apply fabric';
+    banner.style.color = '#4050A0';
+  }
+  renderFabricGrid();
+}
+
+// ─── Avatar Sliders ──────────────────────────────────────────────────────────
+const MEASURES = [
+  {key:'height',label:'Height',unit:'cm',min:150,max:200,icon:'📏'},
+  {key:'bust',label:'Bust',unit:'cm',min:72,max:130,icon:'📐'},
+  {key:'waist',label:'Waist',unit:'cm',min:54,max:110,icon:'📐'},
+  {key:'hips',label:'Hips',unit:'cm',min:78,max:140,icon:'📐'},
+  {key:'shoulder',label:'Shoulder Width',unit:'cm',min:30,max:56,icon:'↔'},
+  {key:'inseam',label:'Inseam',unit:'cm',min:60,max:96,icon:'📏'},
+];
+
+function updateMeasureSliders() {
+  document.querySelectorAll('.measure-range').forEach(input => {
+    input.value = state.avatar[input.dataset.key];
+    const valEl = document.getElementById('val-'+input.dataset.key);
+    if (valEl) valEl.textContent = Math.round(state.avatar[input.dataset.key]);
+  });
+}
+
+function buildMeasureSliders() {
+  const container = document.getElementById('measure-sliders');
+  container.innerHTML = MEASURES.map(m=>`
+    <div class="measure-row">
+      <div class="measure-header">
+        <span style="font-size:16px">${m.icon}</span>
+        <span class="measure-lbl">${m.label}</span>
+        <span class="measure-val"><span id="val-${m.key}">${Math.round(state.avatar[m.key])}</span><span class="measure-unit"> ${m.unit}</span></span>
+      </div>
+      <input type="range" class="measure-range" data-key="${m.key}"
+        min="${m.min}" max="${m.max}" value="${state.avatar[m.key]}"
+        oninput="updateMeasure('${m.key}', this.value)">
+    </div>
+  `).join('');
+}
+
+window.updateMeasure = function(key, val) {
+  state.avatar[key] = parseFloat(val);
+  const el = document.getElementById('val-'+key);
+  if (el) el.textContent = Math.round(val);
+  buildAvatar(); rebuildGarments();
+};
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+buildMeasureSliders();
+renderFabricGrid();
+renderGarmentList();
+</script>
+</body>
+</html>
