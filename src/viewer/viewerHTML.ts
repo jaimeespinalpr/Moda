@@ -20,22 +20,31 @@ export const VIEWER_HTML = `<!DOCTYPE html>
 </script>
 <script type="module">
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 
 // ─── Scene ───────────────────────────────────────────────────────────────────
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x111318);
 
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-renderer.setPixelRatio(window.devicePixelRatio);
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.1;
+renderer.toneMappingExposure = 1.3;
 document.body.appendChild(renderer.domElement);
 
-const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 100);
-camera.position.set(0, 0.4, 5.5);
+// ─── Environment map (studio room – makes ALL materials realistic) ─────────
+RectAreaLightUniformsLib.init();
+const pmremGen = new THREE.PMREMGenerator(renderer);
+const envTex = pmremGen.fromScene(new RoomEnvironment(renderer), 0.02).texture;
+scene.environment = envTex;
+scene.background = new THREE.Color(0x0c0e14);
+pmremGen.dispose();
+
+const camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.set(0, 0.3, 5.8);
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -43,44 +52,51 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// ─── Lighting ────────────────────────────────────────────────────────────────
-scene.add(new THREE.AmbientLight(0xfff5e4, 0.6));
+// ─── Lighting (studio fashion setup) ─────────────────────────────────────────
+// Very low ambient – environment handles diffuse ambient
+scene.add(new THREE.AmbientLight(0xffffff, 0.08));
 
-const key = new THREE.DirectionalLight(0xfff5dc, 2.8);
-key.position.set(3, 6, 5);
+// Key light: large, warm, upper right
+const key = new THREE.DirectionalLight(0xfff8f0, 4.2);
+key.position.set(3.5, 7, 5);
 key.castShadow = true;
 key.shadow.mapSize.set(2048, 2048);
-key.shadow.camera.near = 0.1;
-key.shadow.camera.far = 30;
-key.shadow.camera.left = -5;
-key.shadow.camera.right = 5;
-key.shadow.camera.top = 8;
-key.shadow.camera.bottom = -5;
-key.shadow.bias = -0.001;
+key.shadow.camera.near = 0.1; key.shadow.camera.far = 30;
+key.shadow.camera.left = -5; key.shadow.camera.right = 5;
+key.shadow.camera.top = 9; key.shadow.camera.bottom = -5;
+key.shadow.bias = -0.0006;
 scene.add(key);
 
-const fill = new THREE.DirectionalLight(0xd0e8ff, 1.0);
-fill.position.set(-4, 3, 2);
+// Fill: cool, left – fills shadows softly
+const fill = new THREE.DirectionalLight(0xc8d8ff, 1.6);
+fill.position.set(-5, 3, 2);
 scene.add(fill);
 
-const rim = new THREE.DirectionalLight(0xffffff, 0.5);
-rim.position.set(0, -2, -4);
+// Rim/kicker: warm backlight to separate subject from bg
+const rim = new THREE.DirectionalLight(0xffecd4, 1.2);
+rim.position.set(1, 5, -6);
 scene.add(rim);
 
-const top = new THREE.DirectionalLight(0xfff0cc, 0.4);
-top.position.set(0, 8, 0);
-scene.add(top);
+// Soft box lights (RectAreaLight) for studio softbox feel
+const boxR = new THREE.RectAreaLight(0xfff5e4, 4, 3, 7);
+boxR.position.set(4.5, 0.5, 3); boxR.lookAt(0, 0.5, 0);
+scene.add(boxR);
 
-// ─── Floor (subtle) ──────────────────────────────────────────────────────────
-const floorGeo = new THREE.PlaneGeometry(12, 12);
-const floorMat = new THREE.MeshStandardMaterial({ color: 0x1a1d24, roughness: 0.9, metalness: 0.1 });
-const floor = new THREE.Mesh(floorGeo, floorMat);
+const boxL = new THREE.RectAreaLight(0xe8eeff, 2, 2.5, 6);
+boxL.position.set(-4.5, 0.5, 2); boxL.lookAt(0, 0.5, 0);
+scene.add(boxL);
+
+// ─── Floor ───────────────────────────────────────────────────────────────────
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(18, 18),
+  new THREE.MeshStandardMaterial({ color: 0x14161e, roughness: 0.92, metalness: 0.08, envMapIntensity: 0.4 })
+);
 floor.rotation.x = -Math.PI / 2;
 floor.position.y = -2.8;
 floor.receiveShadow = true;
 scene.add(floor);
 
-// ─── Fabric Texture Generator ─────────────────────────────────────────────────
+// ─── Fabric Texture Generator (per-pixel realistic weave) ────────────────────
 function hexToRgb(hex) {
   const r = parseInt(hex.slice(1,3),16);
   const g = parseInt(hex.slice(3,5),16);
@@ -88,251 +104,308 @@ function hexToRgb(hex) {
   return {r, g, b};
 }
 
-function darken(hex, factor) {
-  const {r,g,b} = hexToRgb(hex);
-  return \`rgb(\${Math.round(r*factor)},\${Math.round(g*factor)},\${Math.round(b*factor)})\`;
-}
-
-function lighten(hex, factor) {
-  const {r,g,b} = hexToRgb(hex);
-  return \`rgb(\${Math.min(255,Math.round(r+(255-r)*factor))},\${Math.min(255,Math.round(g+(255-g)*factor))},\${Math.min(255,Math.round(b+(255-b)*factor))})\`;
-}
+function clamp(v) { return Math.max(0, Math.min(255, Math.round(v))); }
 
 function createFabricTexture(fabricId, color) {
   const size = 512;
   const c = document.createElement('canvas');
   c.width = size; c.height = size;
   const ctx = c.getContext('2d');
-  ctx.fillStyle = color;
-  ctx.fillRect(0, 0, size, size);
+  const img = ctx.createImageData(size, size);
+  const d = img.data;
+  const {r, g, b} = hexToRgb(color);
 
-  switch(fabricId) {
+  // Fill base color
+  for (let i = 0; i < size * size * 4; i += 4) {
+    d[i] = r; d[i+1] = g; d[i+2] = b; d[i+3] = 255;
+  }
+
+  switch (fabricId) {
     case 'cotton': {
-      ctx.globalAlpha = 0.12;
-      for (let i = 0; i < size; i += 4) {
-        ctx.strokeStyle = darken(color, 0.7);
-        ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, size); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(size, i); ctx.stroke();
-      }
-      ctx.globalAlpha = 0.06;
-      for (let i = 0; i < size; i += 8) {
-        ctx.strokeStyle = lighten(color, 0.3);
-        ctx.lineWidth = 0.5;
-        ctx.beginPath(); ctx.moveTo(i+2, 0); ctx.lineTo(i+2, size); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(0, i+2); ctx.lineTo(size, i+2); ctx.stroke();
+      const T = 7; // thread pitch in pixels
+      for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+        const tx = Math.floor(x / T), ty = Math.floor(y / T);
+        const px = (x % T) / T, py = (y % T) / T;
+        const isWarp = (tx + ty) % 2 === 0;
+        const tc = isWarp ? py : px;
+        // Thread roundness highlight
+        const hi = 0.78 + 0.22 * Math.sin(tc * Math.PI);
+        // Shadow at crossovers
+        const cross = Math.min(px, py, 1-px, 1-py) * 4;
+        const sh = 0.82 + 0.18 * Math.pow(cross, 0.5);
+        // Subtle per-thread color variation (natural fiber irregularity)
+        const v = 0.94 + 0.06 * (((tx*127+ty*311)&255)/255);
+        const f = hi * sh * v;
+        const i2 = (y*size+x)*4;
+        d[i2]=clamp(r*f); d[i2+1]=clamp(g*f); d[i2+2]=clamp(b*f);
       }
       break;
     }
     case 'denim': {
-      ctx.globalAlpha = 0.18;
-      for (let i = -size; i < size*2; i += 5) {
-        ctx.strokeStyle = darken(color, 0.6);
-        ctx.lineWidth = 2.5;
-        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i + size, size); ctx.stroke();
-      }
-      ctx.globalAlpha = 0.07;
-      for (let i = -size; i < size*2; i += 10) {
-        ctx.strokeStyle = lighten(color, 0.4);
-        ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i + size, size); ctx.stroke();
-      }
-      ctx.globalAlpha = 0.05;
-      for (let i = 0; i < size; i += 2) {
-        for (let j = 0; j < size; j += 2) {
-          if (Math.random() > 0.6) {
-            ctx.fillStyle = lighten(color, 0.2);
-            ctx.fillRect(i, j, 1, 1);
-          }
-        }
+      const T = 5; // denim has tighter warp threads
+      for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+        const tx = Math.floor(x / T), ty = Math.floor(y / T);
+        const px = (x % T) / T, py = (y % T) / T;
+        // 3×1 right-hand twill: weft floats every 4th crossing offset by row
+        const twill = (tx * 3 + ty) % 4;
+        const isWeft = twill === 0;
+        const tc = isWeft ? py : px;
+        const hi = 0.7 + 0.3 * Math.sin(tc * Math.PI);
+        // Denim weft is much lighter (white-ish cotton)
+        const weftLight = isWeft ? 1.6 : 1.0;
+        const v = 0.9 + 0.1 * (((tx*73+ty*127)&255)/255);
+        const f = hi * v;
+        const i2 = (y*size+x)*4;
+        d[i2]=clamp(r*f*weftLight); d[i2+1]=clamp(g*f*weftLight); d[i2+2]=clamp(b*f*weftLight);
       }
       break;
     }
     case 'linen': {
-      ctx.globalAlpha = 0.2;
-      for (let i = 0; i < size; i += 3) {
-        ctx.strokeStyle = i%6===0 ? darken(color, 0.65) : lighten(color, 0.25);
-        ctx.lineWidth = i%6===0 ? 1.5 : 0.8;
-        ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(size, i); ctx.stroke();
-      }
-      ctx.globalAlpha = 0.1;
-      for (let i = 0; i < size; i += 6) {
-        ctx.strokeStyle = darken(color, 0.7);
-        ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, size); ctx.stroke();
+      const T = 11; // linen has thick, irregular threads
+      for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+        const tx = Math.floor(x / T), ty = Math.floor(y / T);
+        const px = (x % T) / T, py = (y % T) / T;
+        const isWarp = (tx + ty) % 2 === 0;
+        const tc = isWarp ? py : px;
+        // Natural slub (thickness variation per thread)
+        const slub = 0.85 + 0.15 * (((tx*37+ty*19)&15)/15);
+        const hi = (0.68 + 0.32 * Math.sin(tc * Math.PI)) * slub;
+        const i2 = (y*size+x)*4;
+        d[i2]=clamp(r*hi); d[i2+1]=clamp(g*hi); d[i2+2]=clamp(b*hi);
       }
       break;
     }
     case 'silk': {
-      const grad = ctx.createLinearGradient(0, 0, size, size);
-      grad.addColorStop(0, color);
-      grad.addColorStop(0.3, lighten(color, 0.45));
-      grad.addColorStop(0.5, color);
-      grad.addColorStop(0.7, lighten(color, 0.3));
-      grad.addColorStop(1, color);
-      ctx.globalAlpha = 0.7;
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, size, size);
-      ctx.globalAlpha = 0.06;
-      for (let i = -size; i < size*2; i += 8) {
-        ctx.strokeStyle = lighten(color, 0.6);
-        ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i+size, size); ctx.stroke();
+      // Satin weave: very smooth, strong directional sheen
+      for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+        const i2 = (y*size+x)*4;
+        // Multi-direction satin sheen
+        const d1 = ((x*0.7 + y*0.3) % size) / size;
+        const d2 = ((x*0.2 + y*0.8) % size) / size;
+        const sheen = 0.55 + 0.35 * Math.pow(Math.sin(d1*Math.PI*1.5), 6)
+                          + 0.1  * Math.pow(Math.sin(d2*Math.PI*2), 4);
+        // Add highlight brightness
+        const hi = Math.pow(sheen, 0.7);
+        d[i2]=clamp(r*hi + 40*(sheen-0.55)); d[i2+1]=clamp(g*hi + 40*(sheen-0.55)); d[i2+2]=clamp(b*hi + 40*(sheen-0.55));
       }
       break;
     }
     case 'polyester': {
-      ctx.globalAlpha = 0.08;
-      for (let i = 0; i < size; i += 2) {
-        ctx.strokeStyle = darken(color, 0.75);
-        ctx.lineWidth = 0.5;
-        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, size); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(size, i); ctx.stroke();
+      const T = 3; // very fine synthetic threads
+      for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+        const tx = Math.floor(x/T), ty = Math.floor(y/T);
+        const px = (x%T)/T, py = (y%T)/T;
+        const isWarp = (tx+ty)%2===0;
+        const tc = isWarp ? py : px;
+        const hi = 0.88 + 0.12 * Math.sin(tc*Math.PI);
+        // Polyester micro-sheen
+        const sh = 1.0 + 0.04 * Math.sin((x+y)*0.25);
+        const i2=(y*size+x)*4;
+        d[i2]=clamp(r*hi*sh); d[i2+1]=clamp(g*hi*sh); d[i2+2]=clamp(b*hi*sh);
       }
-      const sheen = ctx.createLinearGradient(0, 0, size*0.7, size*0.7);
-      sheen.addColorStop(0, 'rgba(255,255,255,0.08)');
-      sheen.addColorStop(0.5, 'rgba(255,255,255,0.0)');
-      sheen.addColorStop(1, 'rgba(255,255,255,0.04)');
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = sheen;
-      ctx.fillRect(0, 0, size, size);
       break;
     }
     case 'velvet': {
-      for (let i = 0; i < 60000; i++) {
-        const x = Math.random()*size, y = Math.random()*size;
-        const bright = Math.random();
-        ctx.globalAlpha = bright * 0.12;
-        ctx.fillStyle = bright > 0.5 ? lighten(color, 0.35) : darken(color, 0.5);
-        ctx.fillRect(x, y, 1.2, 1.2);
-      }
-      ctx.globalAlpha = 0.04;
-      for (let i = 0; i < size; i += 3) {
-        ctx.strokeStyle = lighten(color, 0.6);
-        ctx.lineWidth = 0.5;
-        ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(size, i); ctx.stroke();
+      // Pile fabric – subtle variation (sheen is handled by MeshPhysicalMaterial)
+      for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+        const i2=(y*size+x)*4;
+        // Pile direction creates subtle horizontal streak
+        const pile = 0.88 + 0.12 * Math.sin((y/size)*Math.PI*3 + x*0.02);
+        // Fine noise for pile length variation
+        const noise = (((x*7+y*13+x*y*3)&0xff)/255)*0.08;
+        const f = pile + noise - 0.04;
+        d[i2]=clamp(r*f); d[i2+1]=clamp(g*f); d[i2+2]=clamp(b*f);
       }
       break;
     }
     case 'leather': {
-      for (let i = 0; i < 8000; i++) {
-        const x = Math.random()*size, y = Math.random()*size;
-        ctx.globalAlpha = Math.random()*0.07;
-        ctx.fillStyle = Math.random()>0.5 ? darken(color,0.6) : lighten(color,0.15);
-        const s = Math.random()*3+1;
-        ctx.beginPath();
-        ctx.ellipse(x, y, s, s*0.4, Math.random()*Math.PI, 0, Math.PI*2);
-        ctx.fill();
+      // Voronoi grain + pores
+      for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+        const i2=(y*size+x)*4;
+        const gx=x/28, gy=y/28;
+        const cx=Math.floor(gx), cy=Math.floor(gy);
+        let minD=99;
+        for (let di=-1;di<=1;di++) for (let dj=-1;dj<=1;dj++) {
+          const sd=((cx+di)*73+(cy+dj)*127)&0xffff;
+          const px=(cx+di)+(sd&255)/255, py=(cy+dj)+((sd>>8)&255)/255;
+          const dist=Math.sqrt((gx-px)**2+(gy-py)**2);
+          minD=Math.min(minD,dist);
+        }
+        const grain=Math.pow(minD,0.35);
+        // Micro pores
+        const pore=((x*1049+y*1571)&0xffff)>0xf800?0.72:1.0;
+        // Surface sheen gradient
+        const sheen=1.0+0.08*Math.pow(Math.sin((x+y*0.5)/size*Math.PI),2);
+        const f=(0.72+0.28*grain)*pore*sheen;
+        d[i2]=clamp(r*f); d[i2+1]=clamp(g*f); d[i2+2]=clamp(b*f);
       }
-      const sh = ctx.createLinearGradient(0,0,size*0.6,size*0.4);
-      sh.addColorStop(0,'rgba(255,255,255,0.12)');
-      sh.addColorStop(1,'rgba(255,255,255,0.0)');
-      ctx.globalAlpha = 1; ctx.fillStyle = sh;
-      ctx.fillRect(0,0,size,size);
       break;
     }
     case 'flannel': {
-      const colors2 = [darken(color,0.6), lighten(color,0.3), darken(color,0.8)];
-      const stripe = 32;
-      for (let i = 0; i < size; i += stripe) {
-        ctx.globalAlpha = 0.18;
-        ctx.fillStyle = colors2[Math.floor(i/stripe)%3];
-        ctx.fillRect(i, 0, stripe, size);
-      }
-      for (let i = 0; i < size; i += stripe) {
-        ctx.globalAlpha = 0.14;
-        ctx.fillStyle = colors2[Math.floor(i/stripe)%3];
-        ctx.fillRect(0, i, size, stripe);
-      }
-      ctx.globalAlpha = 0.07;
-      for (let i = 0; i < size; i += 4) {
-        ctx.strokeStyle = darken(color, 0.7);
-        ctx.lineWidth = 0.5;
-        ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,size); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(size,i); ctx.stroke();
+      // Brushed twill + plaid
+      const S1=48, S2=96;
+      for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+        const i2=(y*size+x)*4;
+        // Plaid pattern
+        const hb=(Math.floor(x/S1))%3===1?0.78:1.0;
+        const vb=(Math.floor(y/S2))%3===1?0.82:1.0;
+        const cross=(Math.floor(x/S1))%3===1&&(Math.floor(y/S2))%3===1?0.65:Math.min(hb,vb);
+        // Brushed softness noise
+        const brush=0.92+0.08*(((x*3+y*7+x*y)&0xff)/255);
+        const f=cross*brush;
+        d[i2]=clamp(r*f); d[i2+1]=clamp(g*f); d[i2+2]=clamp(b*f);
       }
       break;
     }
   }
 
+  ctx.putImageData(img, 0, 0);
   const tex = new THREE.CanvasTexture(c);
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(6, 6);
+  tex.repeat.set(10, 10);
+  tex.anisotropy = 8;
   return tex;
 }
 
 function createNormalMap(fabricId) {
-  const size = 256;
+  const size = 512;
   const c = document.createElement('canvas');
   c.width = size; c.height = size;
   const ctx = c.getContext('2d');
   const img = ctx.createImageData(size, size);
   const d = img.data;
 
-  for (let i = 0; i < size; i++) {
-    for (let j = 0; j < size; j++) {
-      let nx = 128, ny = 128, nz = 255;
-      switch(fabricId) {
-        case 'cotton': {
-          const wave = Math.sin(i*0.8)*12 + Math.sin(j*0.8)*12;
-          nx = 128 + wave; ny = 128 + wave; break;
-        }
-        case 'denim': {
-          const d2 = Math.sin((i+j)*0.4)*18;
-          nx = 128+d2; ny = 128+d2*0.5; break;
-        }
-        case 'linen': {
-          nx = 128+Math.sin(j*1.0)*16;
-          ny = 128+Math.sin(i*1.6)*10; break;
-        }
-        case 'silk': { nx=128; ny=128; nz=255; break; }
-        case 'velvet': {
-          nx = 128+(Math.random()-0.5)*20;
-          ny = 128+(Math.random()-0.5)*20; break;
-        }
-        case 'leather': {
-          nx = 128+(Math.sin(i*0.3+j*0.1))*14;
-          ny = 128+(Math.sin(j*0.3+i*0.1))*14; break;
-        }
-        case 'flannel': {
-          nx = 128+Math.sin(i*0.5)*10+Math.sin(j*0.5)*10;
-          ny = 128+Math.sin(i*0.5)*10+Math.sin(j*0.5)*10; break;
-        }
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const i2 = (y*size+x)*4;
+    let nx=128, ny=128;
+
+    switch(fabricId) {
+      case 'cotton': {
+        const T=7;
+        const px=(x%T)/T, py=(y%T)/T;
+        const tx=Math.floor(x/T), ty=Math.floor(y/T);
+        const isWarp=(tx+ty)%2===0;
+        // Normal bends over each thread cylinder
+        const tc=isWarp?py:px;
+        const bump=Math.cos((tc-0.5)*Math.PI)*18;
+        nx=clamp(128+(isWarp?0:bump)); ny=clamp(128+(isWarp?bump:0));
+        break;
       }
-      const idx = (i*size+j)*4;
-      d[idx]=Math.min(255,Math.max(0,nx));
-      d[idx+1]=Math.min(255,Math.max(0,ny));
-      d[idx+2]=nz; d[idx+3]=255;
+      case 'denim': {
+        const T=5;
+        const tx=Math.floor(x/T), ty=Math.floor(y/T);
+        const px=(x%T)/T, py=(y%T)/T;
+        const twill=(tx*3+ty)%4; const isWeft=twill===0;
+        const tc=isWeft?py:px;
+        const bump=Math.cos((tc-0.5)*Math.PI)*22;
+        // Diagonal direction normal
+        const diag=Math.sin((x+y)*0.05)*8;
+        nx=clamp(128+(isWeft?diag:bump)+diag*0.5);
+        ny=clamp(128+(isWeft?bump:diag));
+        break;
+      }
+      case 'linen': {
+        const T=11; const px=(x%T)/T, py=(y%T)/T;
+        const tx=Math.floor(x/T), ty=Math.floor(y/T);
+        const isWarp=(tx+ty)%2===0; const tc=isWarp?py:px;
+        const bump=Math.cos((tc-0.5)*Math.PI)*28; // linen has more pronounced texture
+        nx=clamp(128+(isWarp?0:bump)); ny=clamp(128+(isWarp?bump:0));
+        break;
+      }
+      case 'silk': { nx=128; ny=128; break; } // silk is flat/smooth
+      case 'polyester': {
+        // Fine regular grid
+        const px=(x%3)/3, py=(y%3)/3;
+        nx=clamp(128+Math.cos((px-0.5)*Math.PI)*8);
+        ny=clamp(128+Math.cos((py-0.5)*Math.PI)*8);
+        break;
+      }
+      case 'velvet': {
+        // Soft random pile direction
+        const seed=(x*7+y*11)&0xff;
+        nx=clamp(128+(seed/255-0.5)*24);
+        ny=clamp(128+Math.sin(y*0.3)*10);
+        break;
+      }
+      case 'leather': {
+        const gx=x/28, gy=y/28;
+        const cx=Math.floor(gx), cy=Math.floor(gy);
+        // Bumpy grain cells
+        const smooth=(gx-cx)*(1-(gx-cx))*4;
+        const smoothY=(gy-cy)*(1-(gy-cy))*4;
+        nx=clamp(128+Math.sin(gx*Math.PI*2)*smooth*20);
+        ny=clamp(128+Math.sin(gy*Math.PI*2)*smoothY*20);
+        break;
+      }
+      case 'flannel': {
+        const T=7; const px=(x%T)/T, py=(y%T)/T;
+        const bump=Math.cos((px-0.5)*Math.PI)*10+Math.cos((py-0.5)*Math.PI)*10;
+        nx=clamp(128+bump); ny=clamp(128+bump);
+        break;
+      }
+      default: { nx=128; ny=128; }
     }
+    d[i2]=nx; d[i2+1]=ny; d[i2+2]=255; d[i2+3]=255;
   }
+
   ctx.putImageData(img, 0, 0);
   const tex = new THREE.CanvasTexture(c);
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(8, 8);
+  tex.repeat.set(10, 10);
   return tex;
 }
 
+// ─── Material factory (PBR + MeshPhysicalMaterial for velvet/silk/leather) ───
 function makeMaterial(fabricId, color, roughness, metalness) {
-  const mat = new THREE.MeshStandardMaterial({
+  const base = {
     color: new THREE.Color(color),
-    roughness,
-    metalness,
+    roughness, metalness,
     map: createFabricTexture(fabricId, color),
     normalMap: createNormalMap(fabricId),
     normalScale: new THREE.Vector2(
-      fabricId==='silk'||fabricId==='polyester' ? 0.15 :
-      fabricId==='velvet' ? 0.5 : 0.4,
-      fabricId==='silk'||fabricId==='polyester' ? 0.15 :
-      fabricId==='velvet' ? 0.5 : 0.4
+      fabricId==='silk' ? 0.05 :
+      fabricId==='linen' ? 0.7 :
+      fabricId==='leather' ? 0.55 :
+      fabricId==='velvet' ? 0.35 : 0.45,
+      fabricId==='silk' ? 0.05 :
+      fabricId==='linen' ? 0.7 :
+      fabricId==='leather' ? 0.55 :
+      fabricId==='velvet' ? 0.35 : 0.45,
     ),
-    envMapIntensity: fabricId==='silk'||fabricId==='leather' ? 0.9 : 0.3,
-    polygonOffset: true,
-    polygonOffsetFactor: -2,
-    polygonOffsetUnits: -4,
-  });
-  return mat;
+    envMapIntensity: fabricId==='silk'?1.4 : fabricId==='leather'?1.1 : fabricId==='polyester'?0.7 : 0.5,
+    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4,
+  };
+
+  // Velvet: MeshPhysicalMaterial with sheen (characteristic cat-eye reflectance)
+  if (fabricId === 'velvet') {
+    return new THREE.MeshPhysicalMaterial({
+      ...base,
+      sheen: 1.0,
+      sheenColor: new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.4),
+      sheenRoughness: 0.5,
+    });
+  }
+  // Silk: sheen for that lustrous iridescent look
+  if (fabricId === 'silk') {
+    return new THREE.MeshPhysicalMaterial({
+      ...base,
+      sheen: 0.6,
+      sheenColor: new THREE.Color(0xffffff),
+      sheenRoughness: 0.15,
+    });
+  }
+  // Leather: clearcoat for the polished surface finish
+  if (fabricId === 'leather') {
+    return new THREE.MeshPhysicalMaterial({
+      ...base,
+      clearcoat: 0.4,
+      clearcoatRoughness: 0.25,
+    });
+  }
+
+  return new THREE.MeshStandardMaterial(base);
 }
 
 // ─── Mannequin Body ───────────────────────────────────────────────────────────
