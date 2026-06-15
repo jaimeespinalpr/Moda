@@ -10,6 +10,7 @@ export interface DesignState {
   pantsColor: string;
   showShirt: boolean;
   showPants: boolean;
+  showMannequin: boolean;
 }
 
 export interface SavedDesign {
@@ -30,6 +31,7 @@ interface Store extends DesignState {
   setPantsColor: (color: string) => void;
   toggleShirt: () => void;
   togglePants: () => void;
+  toggleMannequin: () => void;
   saveDesign: (name: string, thumbnail?: string) => Promise<void>;
   loadSavedDesigns: () => Promise<void>;
   loadDesign: (design: SavedDesign) => void;
@@ -47,6 +49,7 @@ export const useDesignStore = create<Store>((set, get) => ({
   pantsColor: '#1A237E',
   showShirt: true,
   showPants: true,
+  showMannequin: true,
   savedDesigns: [],
 
   setShirtCut: (id) => set({ shirtCutId: id }),
@@ -57,6 +60,7 @@ export const useDesignStore = create<Store>((set, get) => ({
   setPantsColor: (color) => set({ pantsColor: color }),
   toggleShirt: () => set((s) => ({ showShirt: !s.showShirt })),
   togglePants: () => set((s) => ({ showPants: !s.showPants })),
+  toggleMannequin: () => set((s) => ({ showMannequin: !s.showMannequin })),
 
   saveDesign: async (name, thumbnail) => {
     const state = get();
@@ -74,6 +78,7 @@ export const useDesignStore = create<Store>((set, get) => ({
         pantsColor: state.pantsColor,
         showShirt: state.showShirt,
         showPants: state.showPants,
+        showMannequin: state.showMannequin,
       },
     };
     const updated = [design, ...state.savedDesigns];

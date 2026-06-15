@@ -328,8 +328,92 @@ function makeMaterial(fabricId, color, roughness, metalness) {
       fabricId==='velvet' ? 0.5 : 0.4
     ),
     envMapIntensity: fabricId==='silk'||fabricId==='leather' ? 0.9 : 0.3,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -4,
   });
   return mat;
+}
+
+// ─── Mannequin Body ───────────────────────────────────────────────────────────
+function createMannequin() {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0xD9CFC4, roughness: 0.82, metalness: 0.04,
+  });
+
+  // Torso – single LatheGeometry from crotch to neck base
+  // Position.y = -0.40 → local y 0 maps to world y -0.40
+  const tp = [
+    new THREE.Vector2(0.06, 0.00),   // crotch → world -0.40
+    new THREE.Vector2(0.28, 0.20),   // hip curve → world -0.20
+    new THREE.Vector2(0.30, 0.42),   // hip → world  0.02
+    new THREE.Vector2(0.24, 0.90),   // waist → world  0.50
+    new THREE.Vector2(0.26, 1.22),   // lower chest → world  0.82
+    new THREE.Vector2(0.28, 1.60),   // chest → world  1.20
+    new THREE.Vector2(0.26, 1.92),   // upper chest → world  1.52
+    new THREE.Vector2(0.20, 2.22),   // shoulder → world  1.82
+    new THREE.Vector2(0.13, 2.45),   // shoulder top → world  2.05
+    new THREE.Vector2(0.10, 2.62),   // neck base → world  2.22
+  ];
+  const torso = new THREE.Mesh(new THREE.LatheGeometry(tp, 32), mat);
+  torso.position.y = -0.40;
+  torso.castShadow = true;
+  g.add(torso);
+
+  // Neck
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.10, 0.30, 16), mat);
+  neck.position.y = 2.38;
+  neck.castShadow = true;
+  g.add(neck);
+
+  // Head
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.20, 26, 18), mat);
+  head.position.y = 2.75;
+  head.castShadow = true;
+  g.add(head);
+
+  // Arms – upper
+  const lArmU = new THREE.Mesh(new THREE.CylinderGeometry(0.078, 0.070, 0.80, 14), mat);
+  lArmU.position.set(-0.47, 1.72, 0);
+  lArmU.rotation.z = 0.10;
+  lArmU.castShadow = true;
+  g.add(lArmU);
+  const rArmU = lArmU.clone(); rArmU.position.x = 0.47; rArmU.rotation.z = -0.10; g.add(rArmU);
+
+  // Arms – forearm
+  const lArmL = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.055, 0.78, 14), mat);
+  lArmL.position.set(-0.52, 0.96, 0);
+  lArmL.rotation.z = 0.08;
+  lArmL.castShadow = true;
+  g.add(lArmL);
+  const rArmL = lArmL.clone(); rArmL.position.x = 0.52; rArmL.rotation.z = -0.08; g.add(rArmL);
+
+  // Hands
+  const hGeo = new THREE.SphereGeometry(0.065, 10, 8);
+  const lHand = new THREE.Mesh(hGeo, mat); lHand.position.set(-0.55, 0.55, 0); g.add(lHand);
+  const rHand = lHand.clone(); rHand.position.x = 0.55; g.add(rHand);
+
+  // Legs – thigh
+  const lLegU = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.115, 1.05, 16), mat);
+  lLegU.position.set(-0.19, -0.90, 0);
+  lLegU.castShadow = true;
+  g.add(lLegU);
+  const rLegU = lLegU.clone(); rLegU.position.x = 0.19; g.add(rLegU);
+
+  // Legs – calf
+  const lLegL = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.075, 1.05, 16), mat);
+  lLegL.position.set(-0.19, -1.95, 0);
+  lLegL.castShadow = true;
+  g.add(lLegL);
+  const rLegL = lLegL.clone(); rLegL.position.x = 0.19; g.add(rLegL);
+
+  // Feet
+  const fGeo = new THREE.BoxGeometry(0.14, 0.08, 0.30);
+  const lFoot = new THREE.Mesh(fGeo, mat); lFoot.position.set(-0.19, -2.51, 0.06); lFoot.castShadow = true; g.add(lFoot);
+  const rFoot = lFoot.clone(); rFoot.position.x = 0.19; g.add(rFoot);
+
+  return g;
 }
 
 // ─── Shirt Geometry ───────────────────────────────────────────────────────────
@@ -552,6 +636,7 @@ let state = {
   pantsColor: '#1A237E',
   showShirt: true,
   showPants: true,
+  showMannequin: true,
 };
 
 let shirtMesh = null;
@@ -599,6 +684,8 @@ let pinchDist = 0;
 let zoom = 5.5;
 const targetGroup = new THREE.Group();
 scene.add(targetGroup);
+const mannequin = createMannequin();
+targetGroup.add(mannequin);
 targetGroup.add(shirtGroup);
 targetGroup.add(pantsGroup);
 
@@ -640,6 +727,7 @@ function applyState(msg) {
   if (msg.pantsColor !== undefined && msg.pantsColor !== state.pantsColor) { state.pantsColor = msg.pantsColor; needPants = true; }
   if (msg.showShirt !== undefined) { state.showShirt = msg.showShirt; if (shirtGroup) shirtGroup.visible = msg.showShirt; }
   if (msg.showPants !== undefined) { state.showPants = msg.showPants; if (pantsGroup) pantsGroup.visible = msg.showPants; }
+  if (msg.showMannequin !== undefined) { state.showMannequin = msg.showMannequin; mannequin.visible = msg.showMannequin; }
   if (needShirt) buildShirt();
   if (needPants) buildPants();
 }

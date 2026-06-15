@@ -34,6 +34,7 @@ export function DesignScreen({ onGoToSaved }: DesignScreenProps) {
   const [isSaving, setIsSaving] = useState(false);
 
   const store = useDesignStore();
+  const { toggleMannequin, showMannequin } = store;
 
   const handleCapture = useCallback((base64: string) => {
     setCapturedB64(base64);
@@ -147,8 +148,14 @@ export function DesignScreen({ onGoToSaved }: DesignScreenProps) {
         >
           <Text style={[styles.toggleText, store.showPants && styles.toggleTextActive]}>👖 Pantalón</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.toggle, showMannequin && styles.toggleActive]}
+          onPress={toggleMannequin}
+        >
+          <Text style={[styles.toggleText, showMannequin && styles.toggleTextActive]}>🧍 Maniquí</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={styles.resetBtn} onPress={() => viewerRef.current?.reset()}>
-          <Text style={styles.resetText}>↺ Reset vista</Text>
+          <Text style={styles.resetText}>↺ Reset</Text>
         </TouchableOpacity>
       </View>
 

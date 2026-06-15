@@ -18,7 +18,7 @@ export const ClothingViewer3D = React.forwardRef<{ capture: () => void; reset: (
       shirtCutId, pantsCutId,
       shirtFabricId, pantsFabricId,
       shirtColor, pantsColor,
-      showShirt, showPants,
+      showShirt, showPants, showMannequin,
     } = useDesignStore();
 
     const sendUpdate = useCallback((patch: object) => {
@@ -35,9 +35,9 @@ export const ClothingViewer3D = React.forwardRef<{ capture: () => void; reset: (
         shirtCutId, pantsCutId,
         shirtFabricId, pantsFabricId,
         shirtColor, pantsColor,
-        showShirt, showPants,
+        showShirt, showPants, showMannequin,
       });
-    }, [shirtCutId, pantsCutId, shirtFabricId, pantsFabricId, shirtColor, pantsColor, showShirt, showPants, sendUpdate]);
+    }, [shirtCutId, pantsCutId, shirtFabricId, pantsFabricId, shirtColor, pantsColor, showShirt, showPants, showMannequin, sendUpdate]);
 
     React.useImperativeHandle(ref, () => ({
       capture: () => {
@@ -66,14 +66,14 @@ export const ClothingViewer3D = React.forwardRef<{ capture: () => void; reset: (
             shirtCutId, pantsCutId,
             shirtFabricId, pantsFabricId,
             shirtColor, pantsColor,
-            showShirt, showPants,
+            showShirt, showPants, showMannequin,
           });
         }
         if (data.type === 'capture' && onCapture) {
           onCapture(data.data);
         }
       } catch (_) {}
-    }, [onCapture, onReady, sendUpdate, shirtCutId, pantsCutId, shirtFabricId, pantsFabricId, shirtColor, pantsColor, showShirt, showPants]);
+    }, [onCapture, onReady, sendUpdate, shirtCutId, pantsCutId, shirtFabricId, pantsFabricId, shirtColor, pantsColor, showShirt, showPants, showMannequin]);
 
     return (
       <View style={styles.container}>
